@@ -6,11 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#1b87f4"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "ie.listit.app",
@@ -41,12 +36,22 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#1b87f4"
+        }
+      ]
     ],
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "e3f0ec55-a167-40a6-8505-69a9ef150044"
       }
-    }
+    },
+    "owner": "listit"
   }
 }
