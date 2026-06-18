@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { StatusBar, BackHandler, Platform, View, ActivityIndicator, StyleSheet } from 'react-native';
+import { StatusBar, BackHandler, Platform, View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { WebView } from 'react-native-webview';
@@ -184,6 +184,34 @@ function ProfileScreen() {
   return <WebScreen url={`${BASE_URL}/user/profile`} webViewRef={ref} />;
 }
 
+function CustomTabBar({ state, descriptors, navigation }) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={{
+      flexDirection: 'row',
+      backgroundColor: NAV_BG,
+      paddingTop: 10,
+      paddingBottom: Math.max(insets.bottom, 16),
+    }}>
+      {state.routes.map((route, index) => {
+        const isFocused = state.index === index;
+        const color = isFocused ? '#fff' : '#888';
+        const iconName = getTabIcon(route.name, isFocused);
+        return (
+          <TouchableOpacity
+            key={route.key}
+            onPress={() => { if (!isFocused) navigation.navigate(route.name); }}
+            style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Ionicons name={iconName} size={24} color={color} />
+            <Text style={{ color, fontSize: 11, fontWeight: '500', marginTop: 3 }}>{route.name}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
 function getTabIcon(routeName, focused) {
   const icons = {
     Browse: focused ? 'search' : 'search-outline',
@@ -207,28 +235,8 @@ export default function App() {
       <StatusBar barStyle="light-content" backgroundColor={NAV_BG} />
       <NavigationContainer>
         <Tab.Navigator
-          screenOptions={({ route }) => ({
-            headerShown: false,
-            tabBarIcon: ({ focused, color, size }) => {
-              const iconName = getTabIcon(route.name, focused);
-              return <Ionicons name={iconName} size={24} color={color} />;
-            },
-            tabBarActiveTintColor: '#fff',
-            tabBarInactiveTintColor: '#888',
-            tabBarStyle: {
-              backgroundColor: NAV_BG,
-              borderTopWidth: 0,
-              paddingBottom: Platform.OS === 'ios' ? 28 : 20,
-              paddingTop: 10,
-              height: Platform.OS === 'ios' ? 90 : 80,
-              elevation: 0,
-              shadowOpacity: 0,
-            },
-            tabBarLabelStyle: {
-              fontSize: 11,
-              fontWeight: '500',
-            },
-          })}
+          tabBar={(props) => <CustomTabBar {...props} />}
+          screenOptions={{ headerShown: false }}
         >
           <Tab.Screen name="Browse" component={BrowseScreen} />
           <Tab.Screen name="Place Ad" component={PlaceAdScreen} />
