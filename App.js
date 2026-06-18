@@ -105,16 +105,24 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [currentUrl, setCurrentUrl] = useState(BASE_URL);
   const [savedCount, setSavedCount] = useState(0);
+  const canGoBackRef = useRef(false);
 
   useEffect(() => {
     if (Platform.OS === 'android') {
       const handler = BackHandler.addEventListener('hardwareBackPress', () => {
-        if (WEB_TABS.has(activeTab) && webViewRef.current) {
+        if (WEB_TABS.has(activeTab) && webViewRef.current && canGoBackRef.current) {
           webViewRef.current.goBack();
           return true;
         }
         if (!WEB_TABS.has(activeTab)) {
           setActiveTab('Browse');
+          return true;
+        }
+        if (WEB_TABS.has(activeTab) && activeTab !== 'Browse') {
+          setActiveTab('Browse');
+          if (webViewRef.current) {
+            webViewRef.current.injectJavaScript(`window.location.href = '${BASE_URL}'; true;`);
+          }
           return true;
         }
         return false;
@@ -192,6 +200,7 @@ function MainContent({
             onLoadEnd={() => setLoading(false)}
             onNavigationStateChange={(navState) => {
               setCurrentUrl(navState.url);
+              canGoBackRef.current = navState.canGoBack;
             }}
             userAgent={Platform.select({
               ios: 'ListitApp/1.0 iOS Safari/605',
