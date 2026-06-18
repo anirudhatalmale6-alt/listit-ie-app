@@ -38,8 +38,12 @@ const INJECTED_JS = `
       [id*="chatbot"], [id*="chat-widget"], [class*="ChatWidget"],
       .fab, [class*="FloatingAction"], [class*="floating-action"],
       div[style*="position: fixed"][style*="bottom"][style*="right"][style*="border-radius: 50%"],
-      /* Hero/banner sections on homepage */
-      [class*="HeroBanner"], [class*="hero-banner"] {
+      /* Homepage marketing sections to hide in app */
+      [class*="HeroBanner"], [class*="hero-banner"],
+      [class*="SimpleAs"], [class*="simple-as"], [class*="AsSimple"],
+      [class*="faq"], [class*="FAQ"], [class*="Faq"],
+      [class*="blog"], [class*="Blog"], [class*="LatestBlog"], [class*="latest-blog"],
+      [class*="popular-search"], [class*="PopularSearch"] {
         display: none !important;
         visibility: hidden !important;
         height: 0 !important;
@@ -77,6 +81,23 @@ const INJECTED_JS = `
       img { max-width: 100%; }
     \`;
     document.head.appendChild(style);
+
+    /* Hide homepage sections by heading text */
+    function hideByHeading(texts) {
+      document.querySelectorAll('h1,h2,h3,h4,h5,h6,p').forEach(function(el) {
+        var t = el.textContent.trim().toLowerCase();
+        for (var i = 0; i < texts.length; i++) {
+          if (t.includes(texts[i])) {
+            var section = el.closest('section') || el.closest('[class*="Section"]') || el.closest('[class*="container"]') || el.parentElement?.parentElement;
+            if (section) { section.style.display = 'none'; }
+            break;
+          }
+        }
+      });
+    }
+    setTimeout(function() {
+      hideByHeading(['it\'s as simple', 'simple , safe', 'read our latest blog', 'frequently asked', 'faq']);
+    }, 1500);
 
     /* Aggressively remove floating widgets that load dynamically */
     var cleanupCheck = setInterval(function() {
