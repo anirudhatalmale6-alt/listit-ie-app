@@ -26,60 +26,12 @@ const INJECTED_JS = `
   (function() {
     var style = document.createElement('style');
     style.textContent = \`
-      .navbar-wrapper, nav.navbar, header,
-      footer, .footer,
-      .whatsapp-btn, a[href*="wa.me"],
-      button[aria-label="Return to top"],
-      .cc-window, .cc-banner, #cookie-notice, #gdpr,
-      .breadcrumb {
-        display: none !important;
-        height: 0 !important;
-        overflow: hidden !important;
-      }
       body {
-        padding-top: 0 !important;
-        margin-top: 0 !important;
         overflow-x: hidden !important;
       }
       * { -webkit-tap-highlight-color: transparent; }
     \`;
     document.head.appendChild(style);
-
-    function appCleanup() {
-      var headings = document.querySelectorAll('h1,h2,h3,h4,h5,h6');
-      for (var i = 0; i < headings.length; i++) {
-        var t = headings[i].textContent.trim();
-        if (t === "It's As Simple As List It" || t === 'FAQ' || t === 'Read our latest blogs') {
-          var target = headings[i].parentElement;
-          if (target && target.parentElement && target.parentElement.id !== 'root') {
-            target = target.parentElement;
-          }
-          if (target && target.id !== 'root') { target.style.display = 'none'; }
-        }
-      }
-      var allEls = document.querySelectorAll('div');
-      for (var j = 0; j < allEls.length; j++) {
-        var fc = allEls[j].firstElementChild;
-        if (fc && fc.textContent && fc.textContent.trim().startsWith("It's not a done deal")) {
-          allEls[j].style.display = 'none';
-        }
-      }
-      document.querySelectorAll('div,iframe').forEach(function(el) {
-        try {
-          var cs = getComputedStyle(el);
-          if (cs.position === 'fixed') {
-            var rect = el.getBoundingClientRect();
-            if (rect.width > 0 && rect.width < 100 && rect.height > 0 && rect.height < 100) {
-              el.style.display = 'none';
-            }
-          }
-        } catch(e) {}
-      });
-      document.querySelectorAll('[class*="_wrapper_"]').forEach(function(el) {
-        var r = el.getBoundingClientRect();
-        if (r.width > 0 && r.width < 80) { el.style.display = 'none'; }
-      });
-    }
 
     var cookieCheck = setInterval(function() {
       var btns = document.querySelectorAll('button');
@@ -92,19 +44,13 @@ const INJECTED_JS = `
     }, 500);
     setTimeout(function() { clearInterval(cookieCheck); }, 5000);
 
-    setTimeout(appCleanup, 1000);
-    setTimeout(appCleanup, 3000);
-    setTimeout(appCleanup, 6000);
-
     var pushState = history.pushState;
     history.pushState = function() {
       pushState.apply(history, arguments);
       window.ReactNativeWebView.postMessage(JSON.stringify({type: 'nav', url: location.href}));
-      setTimeout(appCleanup, 1000);
     };
     window.addEventListener('popstate', function() {
       window.ReactNativeWebView.postMessage(JSON.stringify({type: 'nav', url: location.href}));
-      setTimeout(appCleanup, 1000);
     });
     true;
   })();
