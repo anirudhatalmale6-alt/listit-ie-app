@@ -9,22 +9,69 @@ import { Ionicons } from '@expo/vector-icons';
 const BASE_URL = 'https://listit.ie';
 const Tab = createBottomTabNavigator();
 const LISTIT_BLUE = '#1b87f4';
+const NAV_BG = '#2c2c2e';
 
 const INJECTED_JS = `
   (function() {
     var style = document.createElement('style');
     style.textContent = \`
-      .navbar-wrapper, nav.navbar, footer, .whatsapp-btn, [class*="WhatsApp"],
-      a[href*="wa.me"], .bot-wrapper, [class*="BotWrapper"],
-      button[aria-label="Return to top"] {
+      /* Hide ALL website chrome - navbar, footer, cookie banner, WhatsApp, scroll-to-top */
+      .navbar-wrapper, nav.navbar, nav, header,
+      footer, .footer, [class*="Footer"],
+      .whatsapp-btn, [class*="WhatsApp"], a[href*="wa.me"],
+      .bot-wrapper, [class*="BotWrapper"], [class*="chatbot"],
+      button[aria-label="Return to top"], [class*="scroll-top"], [class*="ScrollTop"],
+      [class*="cookie"], [class*="Cookie"], [class*="consent"], [class*="Consent"],
+      .cc-window, .cc-banner, #cookie-notice, #gdpr,
+      [class*="NavBar"], [class*="navbar"], [class*="Navbar"],
+      [class*="TopBar"], [class*="topbar"],
+      [class*="AppDownload"], [class*="app-download"],
+      [class*="BreadCrumb"], [class*="breadcrumb"],
+      .ReactModal__Overlay[class*="cookie"],
+      div[role="banner"] {
         display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        overflow: hidden !important;
+        pointer-events: none !important;
       }
-      body { padding-top: 0 !important; margin-top: 0 !important; }
-      .container { padding-top: 10px !important; }
-      [class*="PageWrapper"] { margin-top: 10px !important; }
+
+      /* Reset body spacing so content sits at top */
+      body {
+        padding-top: 0 !important;
+        margin-top: 0 !important;
+        overflow-x: hidden !important;
+      }
+      .container, .container-fluid {
+        padding-top: 5px !important;
+      }
+      [class*="PageWrapper"], [class*="pageWrapper"], [class*="page-wrapper"] {
+        margin-top: 0 !important;
+        padding-top: 5px !important;
+      }
+
+      /* Make content full-width and app-like */
+      * { -webkit-tap-highlight-color: transparent; }
+      body { -webkit-text-size-adjust: 100%; }
+      img { max-width: 100%; }
     \`;
     document.head.appendChild(style);
 
+    /* Auto-accept cookie consent if it appears */
+    var cookieCheck = setInterval(function() {
+      var btns = document.querySelectorAll('button');
+      for (var i = 0; i < btns.length; i++) {
+        var txt = btns[i].textContent.toLowerCase().trim();
+        if (txt === 'accept' || txt === 'accept all' || txt === 'accept cookies' || txt === 'i agree') {
+          btns[i].click();
+          clearInterval(cookieCheck);
+          break;
+        }
+      }
+    }, 500);
+    setTimeout(function() { clearInterval(cookieCheck); }, 5000);
+
+    /* Navigation tracking */
     var pushState = history.pushState;
     history.pushState = function() {
       pushState.apply(history, arguments);
@@ -72,14 +119,9 @@ function WebScreen({ url, webViewRef }) {
   );
 }
 
-function HomeScreen() {
+function BrowseScreen() {
   const ref = useRef(null);
   return <WebScreen url={BASE_URL} webViewRef={ref} />;
-}
-
-function SearchScreen() {
-  const ref = useRef(null);
-  return <WebScreen url={`${BASE_URL}/search`} webViewRef={ref} />;
 }
 
 function PlaceAdScreen() {
@@ -99,11 +141,10 @@ function ProfileScreen() {
 
 function getTabIcon(routeName, focused) {
   const icons = {
-    Home: focused ? 'home' : 'home-outline',
-    Search: focused ? 'search' : 'search-outline',
-    Sell: focused ? 'add-circle' : 'add-circle-outline',
-    Messages: focused ? 'chatbubbles' : 'chatbubbles-outline',
-    Profile: focused ? 'person' : 'person-outline',
+    Browse: focused ? 'search' : 'search-outline',
+    'Place Ad': focused ? 'pricetag' : 'pricetag-outline',
+    Messages: focused ? 'chatbubble' : 'chatbubble-outline',
+    'My Profile': focused ? 'person' : 'person-outline',
   };
   return icons[routeName] || 'ellipse';
 }
@@ -118,42 +159,36 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar barStyle="light-content" backgroundColor={LISTIT_BLUE} />
+      <StatusBar barStyle="light-content" backgroundColor={NAV_BG} />
       <NavigationContainer>
         <Tab.Navigator
           screenOptions={({ route }) => ({
             headerShown: false,
             tabBarIcon: ({ focused, color, size }) => {
               const iconName = getTabIcon(route.name, focused);
-              const iconSize = route.name === 'Sell' ? 32 : size;
-              return <Ionicons name={iconName} size={iconSize} color={color} />;
+              return <Ionicons name={iconName} size={24} color={color} />;
             },
-            tabBarActiveTintColor: LISTIT_BLUE,
-            tabBarInactiveTintColor: '#999',
+            tabBarActiveTintColor: '#fff',
+            tabBarInactiveTintColor: '#888',
             tabBarStyle: {
-              backgroundColor: '#fff',
-              borderTopWidth: 1,
-              borderTopColor: '#eee',
+              backgroundColor: NAV_BG,
+              borderTopWidth: 0,
               paddingBottom: Platform.OS === 'ios' ? 20 : 8,
               paddingTop: 8,
               height: Platform.OS === 'ios' ? 85 : 65,
-              elevation: 8,
-              shadowColor: '#000',
-              shadowOffset: { width: 0, height: -2 },
-              shadowOpacity: 0.1,
-              shadowRadius: 4,
+              elevation: 0,
+              shadowOpacity: 0,
             },
             tabBarLabelStyle: {
               fontSize: 11,
-              fontWeight: '600',
+              fontWeight: '500',
             },
           })}
         >
-          <Tab.Screen name="Home" component={HomeScreen} />
-          <Tab.Screen name="Search" component={SearchScreen} />
-          <Tab.Screen name="Sell" component={PlaceAdScreen} />
+          <Tab.Screen name="Browse" component={BrowseScreen} />
+          <Tab.Screen name="Place Ad" component={PlaceAdScreen} />
           <Tab.Screen name="Messages" component={MessagesScreen} />
-          <Tab.Screen name="Profile" component={ProfileScreen} />
+          <Tab.Screen name="My Profile" component={ProfileScreen} />
         </Tab.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
