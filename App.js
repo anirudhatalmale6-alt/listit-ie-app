@@ -35,8 +35,23 @@ const INJECTED_JS = `
         overflow-x: hidden !important;
       }
       * { -webkit-tap-highlight-color: transparent; }
+      #root > div > div:first-child {
+        padding-top: 10px !important;
+      }
     \`;
     document.head.appendChild(style);
+
+    // Force reduce large top padding on search pages
+    setInterval(function() {
+      var divs = document.querySelectorAll('#root div');
+      for (var i = 0; i < divs.length; i++) {
+        var pt = parseInt(window.getComputedStyle(divs[i]).paddingTop);
+        if (pt >= 50 && pt <= 80) {
+          divs[i].style.paddingTop = '10px';
+          break;
+        }
+      }
+    }, 1000);
 
     var cookieCheck = setInterval(function() {
       var btns = document.querySelectorAll('button');
