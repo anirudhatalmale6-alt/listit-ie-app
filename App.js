@@ -196,8 +196,13 @@ function MainContent({
             mediaPlaybackRequiresUserAction={false}
             sharedCookiesEnabled={true}
             thirdPartyCookiesEnabled={true}
-            onLoadStart={() => setLoading(true)}
+            onLoadStart={() => {
+              setLoading(true);
+              setTimeout(() => setLoading(false), 8000);
+            }}
             onLoadEnd={() => setLoading(false)}
+            onError={() => setLoading(false)}
+            onHttpError={() => setLoading(false)}
             onNavigationStateChange={(navState) => {
               setCurrentUrl(navState.url);
               canGoBackRef.current = navState.canGoBack;
