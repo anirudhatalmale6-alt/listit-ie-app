@@ -82,40 +82,65 @@ const INJECTED_JS = `
     \`;
     document.head.appendChild(style);
 
-    /* Hide homepage sections by heading text */
-    function hideByHeading(texts) {
-      document.querySelectorAll('h1,h2,h3,h4,h5,h6,p').forEach(function(el) {
-        var t = el.textContent.trim().toLowerCase();
-        for (var i = 0; i < texts.length; i++) {
-          if (t.includes(texts[i])) {
-            var section = el.closest('section') || el.closest('[class*="Section"]') || el.closest('[class*="container"]') || el.parentElement?.parentElement;
-            if (section) { section.style.display = 'none'; }
-            break;
+    /* Aggressively clean up the page for app view */
+    function appCleanup() {
+      /* Hide sections by text content */
+      document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,strong,b,div').forEach(function(el) {
+        var t = (el.textContent || '').trim().toLowerCase();
+        if (t === "it's as simple as list it" || t === 'simple, safe , secure' || t === 'simple , safe , secure' ||
+            t.startsWith('faq') || t === 'read our latest blogs' ||
+            t.includes("it's not a done deal until you list it")) {
+          var target = el;
+          for (var i = 0; i < 4; i++) {
+            if (target.parentElement && target.parentElement.tagName !== 'BODY' && target.parentElement.tagName !== 'HTML' && target.parentElement.id !== 'root') {
+              target = target.parentElement;
+            }
           }
+          target.style.cssText = 'display:none!important;height:0!important;overflow:hidden!important;';
+        }
+      });
+
+      /* Remove ALL fixed-position floating widgets (chatbot, feedback, etc) */
+      document.querySelectorAll('div,iframe,a').forEach(function(el) {
+        var s = getComputedStyle(el);
+        if (s.position === 'fixed') {
+          var r = el.getBoundingClientRect();
+          if (r.width < 120 && r.height < 120) {
+            el.remove();
+          }
+        }
+      });
+
+      /* Remove iframes (feedback widgets, chat widgets) */
+      document.querySelectorAll('iframe').forEach(function(el) {
+        var src = el.src || el.title || '';
+        if (src.toLowerCase().includes('feedback') || src.toLowerCase().includes('survey') || src.toLowerCase().includes('chat')) {
+          el.remove();
+        }
+      });
+
+      /* Remove elements with wrapper class pattern (chatbot) */
+      document.querySelectorAll('[class*="_wrapper_"]').forEach(function(el) {
+        var r = el.getBoundingClientRect();
+        if (r.width < 80 && r.height < 80) { el.remove(); }
+      });
+
+      /* Hide social media icons row at top of page */
+      document.querySelectorAll('a[href*="facebook.com"],a[href*="twitter.com"],a[href*="instagram.com"]').forEach(function(el) {
+        var row = el.parentElement;
+        if (row && row.children.length <= 6) {
+          var r = row.getBoundingClientRect();
+          if (r.top < 50 && r.height < 40) { row.style.display = 'none'; }
         }
       });
     }
-    setTimeout(function() {
-      hideByHeading(['it\'s as simple', 'simple , safe', 'read our latest blog', 'frequently asked', 'faq']);
-    }, 1500);
 
-    /* Aggressively remove floating widgets that load dynamically */
-    var cleanupCheck = setInterval(function() {
-      document.querySelectorAll('[class*="feedback"],[class*="Feedback"],[id*="feedback"],[id*="Feedback"]').forEach(function(el) { el.remove(); });
-      document.querySelectorAll('[class*="chatbot"],[class*="Chatbot"],[id*="chatbot"],[class*="bot-wrapper"],[class*="BotWrapper"]').forEach(function(el) { el.remove(); });
-      document.querySelectorAll('iframe[title*="feedback"],iframe[title*="Feedback"]').forEach(function(el) { el.remove(); });
-      var fixedEls = document.querySelectorAll('div[style*="position: fixed"]');
-      fixedEls.forEach(function(el) {
-        var s = el.style;
-        var r = el.getBoundingClientRect();
-        if (r.width < 80 && r.height < 80 && r.bottom > window.innerHeight - 200 && r.right > window.innerWidth - 200) {
-          if (!el.querySelector('button[class*="Call"],button[class*="Message"]')) {
-            el.style.display = 'none';
-          }
-        }
-      });
-    }, 1000);
-    setTimeout(function() { clearInterval(cleanupCheck); }, 15000);
+    /* Run cleanup multiple times to catch dynamically loaded elements */
+    setTimeout(appCleanup, 800);
+    setTimeout(appCleanup, 2000);
+    setTimeout(appCleanup, 4000);
+    var cleanupInterval = setInterval(appCleanup, 3000);
+    setTimeout(function() { clearInterval(cleanupInterval); }, 20000);
 
     /* Auto-accept cookie consent if it appears */
     var cookieCheck = setInterval(function() {
@@ -233,9 +258,9 @@ export default function App() {
             tabBarStyle: {
               backgroundColor: NAV_BG,
               borderTopWidth: 0,
-              paddingBottom: Platform.OS === 'ios' ? 20 : 8,
-              paddingTop: 8,
-              height: Platform.OS === 'ios' ? 85 : 65,
+              paddingBottom: Platform.OS === 'ios' ? 24 : 12,
+              paddingTop: 10,
+              height: Platform.OS === 'ios' ? 88 : 72,
               elevation: 0,
               shadowOpacity: 0,
             },
