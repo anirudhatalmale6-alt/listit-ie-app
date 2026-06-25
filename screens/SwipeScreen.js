@@ -24,14 +24,18 @@ export default function SwipeScreen({ onSavedCountChange }) {
 
   const fetchAds = useCallback(async (pg = 1) => {
     try {
-      const params = new URLSearchParams({
-        limit: '20',
+      const body = {
+        limit: 20,
         sort_order: 'DESC',
         sort_by: 'last_bump_at',
-        page: String(pg),
-        status: '1',
+        page: pg,
+        status: 1,
+      };
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
       });
-      const res = await fetch(`${API_URL}?${params}`);
       const data = await res.json();
       if (data.result && data.result.length > 0) {
         const fresh = data.result.filter(a => !seenIds.current.has(a.id));
