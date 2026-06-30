@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, Dimensions, Linking, Share, FlatList, Alert, Modal,
+  ActivityIndicator, Dimensions, Linking, Share, FlatList, Alert, Modal, TextInput,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -425,6 +426,202 @@ function NotifyMeSection() {
   );
 }
 
+function MessageModal({ visible, onClose, ad }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const seller = ad?.business_name || ad?.dealer_name || ad?.userDetails?.business_name ||
+    ad?.full_name || ad?.userDetails?.name || 'Seller';
+
+  const handleSend = async () => {
+    if (!message.trim()) {
+      Alert.alert('Message Required', 'Please enter a message.');
+      return;
+    }
+    setSending(true);
+    try {
+      await fetch(`${API}/api/user/ads/${ad.id}/enquiry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), phone: phone.trim(), email: email.trim(), message: message.trim(), ad_id: ad.id }),
+      });
+      Alert.alert('Message Sent', 'Your enquiry has been sent to the seller.');
+      onClose();
+      setMessage('');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to send message. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent statusBarTranslucent onRequestClose={onClose}>
+      <KeyboardAvoidingView style={msgStyles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={msgStyles.container}>
+          <View style={msgStyles.header}>
+            <View style={msgStyles.sellerRow}>
+              <View style={msgStyles.sellerAvatar}>
+                <Ionicons name="person" size={22} color="#999" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={msgStyles.sellerName}>{seller}</Text>
+                <Text style={msgStyles.headerSub}>Send enquiry to seller</Text>
+              </View>
+              <TouchableOpacity onPress={onClose} hitSlop={12}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={msgStyles.divider} />
+
+          <ScrollView style={msgStyles.form} keyboardShouldPersistTaps="handled">
+            <Text style={msgStyles.label}>Your full name</Text>
+            <TextInput style={msgStyles.input} value={name} onChangeText={setName}
+              placeholder="Your full name" placeholderTextColor="#aaa" />
+
+            <Text style={msgStyles.label}>Your number</Text>
+            <TextInput style={msgStyles.input} value={phone} onChangeText={setPhone}
+              placeholder="Your phone number" placeholderTextColor="#aaa" keyboardType="phone-pad" />
+
+            <Text style={msgStyles.label}>Your email</Text>
+            <TextInput style={msgStyles.input} value={email} onChangeText={setEmail}
+              placeholder="Your email" placeholderTextColor="#aaa" keyboardType="email-address" autoCapitalize="none" />
+
+            <Text style={msgStyles.label}>Your message</Text>
+            <TextInput style={[msgStyles.input, { height: 100, textAlignVertical: 'top' }]}
+              value={message} onChangeText={setMessage}
+              placeholder="Type your message..." placeholderTextColor="#aaa"
+              multiline numberOfLines={4} />
+
+            <Text style={msgStyles.disclaimer}>
+              Your personal details will only be passed to this seller for them to contact you.
+            </Text>
+          </ScrollView>
+
+          <View style={msgStyles.footer}>
+            <TouchableOpacity style={msgStyles.cancelBtn} onPress={onClose}>
+              <Text style={msgStyles.cancelText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[msgStyles.sendBtn, sending && { opacity: 0.6 }]}
+              onPress={handleSend} disabled={sending}>
+              <Text style={msgStyles.sendText}>{sending ? 'Sending...' : 'Send'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const msgStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  container: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    maxHeight: SCREEN_HEIGHT * 0.8,
+    overflow: 'hidden',
+  },
+  header: {
+    padding: 20,
+    paddingBottom: 16,
+  },
+  sellerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  sellerAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sellerName: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: '#1a1a1a',
+  },
+  headerSub: {
+    fontSize: 13,
+    color: '#888',
+    marginTop: 2,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#e0e0e0',
+  },
+  form: {
+    padding: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 6,
+    marginTop: 14,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: '#1a1a1a',
+    backgroundColor: '#fafafa',
+  },
+  disclaimer: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 16,
+    lineHeight: 17,
+  },
+  footer: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#e0e0e0',
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+  },
+  cancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#555',
+  },
+  sendBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    backgroundColor: '#e74c3c',
+    alignItems: 'center',
+  },
+  sendText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+  },
+});
+
 function SellerSection({ ad }) {
   const user = ad.userDetails || {};
   const isDealer = user.user_type === 'dealer' || user.user_type === 'trader' ||
@@ -526,6 +723,20 @@ function SellerSection({ ad }) {
           </TouchableOpacity>
         )}
 
+        {user.email_contact && (
+          <TouchableOpacity style={styles.dealerInfoRow} onPress={() => Linking.openURL(`mailto:${user.email_contact}`)}>
+            <Ionicons name="mail-outline" size={16} color="#666" />
+            <Text style={[styles.dealerInfoText, { color: BLUE }]}>{user.email_contact}</Text>
+          </TouchableOpacity>
+        )}
+
+        {user.whatsapp_contact && (
+          <TouchableOpacity style={styles.dealerInfoRow} onPress={() => Linking.openURL(`https://wa.me/${String(user.whatsapp_contact).replace(/\D/g, '')}`)}>
+            <Ionicons name="logo-whatsapp" size={16} color="#25d366" />
+            <Text style={[styles.dealerInfoText, { color: '#25d366' }]}>WhatsApp</Text>
+          </TouchableOpacity>
+        )}
+
         {(ad.live_ads_count > 0 || ad.total_ads_count > 0) && (
           <View>
             <View style={styles.dealerInfoRow}>
@@ -616,6 +827,7 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [relatedAds, setRelatedAds] = useState([]);
+  const [msgVisible, setMsgVisible] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -656,9 +868,12 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
   }, [ad]);
 
   const handleCall = useCallback(() => {
-    if (ad?.phone) {
-      const phoneCode = ad.phone_code || '353';
-      Linking.openURL(`tel:+${phoneCode}${ad.phone}`);
+    const user = ad?.userDetails || {};
+    const phone = user.phone_contact || ad?.phone;
+    if (phone) {
+      const phoneCode = ad?.phone_code || '353';
+      const cleaned = String(phone).replace(/^0+/, '');
+      Linking.openURL(`tel:+${phoneCode}${cleaned}`);
     }
   }, [ad]);
 
@@ -732,13 +947,11 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
 
   const price = parseFloat(ad.price || 0);
   const priceStr = price > 0 ? `€${price.toLocaleString('en-IE')}` : 'Free';
-  const allowContact = String(ad.allow_contact || '').split(',').map(s => s.trim());
-  const canCall = allowContact.includes('1') && ad.phone;
-  const canMessage = allowContact.includes('2');
+  const adUser = ad.userDetails || {};
+  const hasPhone = !!(adUser.phone_contact || ad.phone);
   const timeAgo = getTimeAgo(ad.created_at);
   const vd = ad.vehicleData;
   const isVehicle = ad.is_vehicle === 1 && vd && vd.found !== false;
-  const adUser = ad.userDetails || {};
   const isDealerAd = adUser.user_type === 'dealer' || adUser.user_type === 'trader' ||
     adUser.vendor_type === 'dealer' || !!adUser.dealer_status ||
     ad.im_trader === 1 || !!ad.business_name || !!ad.dealer_name || !!adUser.business_name;
@@ -932,42 +1145,20 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
 
       {/* Contact bar with safe area */}
       <View style={[styles.contactBar, { paddingBottom: Math.max(insets.bottom, 16) + 4 }]}>
-        {isDealerAd && adUser.email_contact ? (
-          <>
-            <TouchableOpacity style={styles.contactBtnOutline} onPress={() => Linking.openURL(`mailto:${adUser.email_contact}`)}>
-              <Ionicons name="mail-outline" size={18} color="#333" />
-              <Text style={styles.contactBtnOutlineText}>Email</Text>
-            </TouchableOpacity>
-            {adUser.whatsapp_contact ? (
-              <TouchableOpacity style={styles.contactBtnOutline} onPress={() => Linking.openURL(`https://wa.me/${adUser.whatsapp_contact.replace(/\D/g, '')}`)}>
-                <Ionicons name="logo-whatsapp" size={18} color="#25d366" />
-                <Text style={styles.contactBtnOutlineText}>WhatsApp</Text>
-              </TouchableOpacity>
-            ) : null}
-            {canCall && (
-              <TouchableOpacity style={styles.contactBtnPrimary} onPress={handleCall}>
-                <Ionicons name="call-outline" size={18} color="#fff" />
-                <Text style={styles.contactBtnPrimaryText}>Call</Text>
-              </TouchableOpacity>
-            )}
-          </>
-        ) : (
-          <>
-            {canMessage && (
-              <TouchableOpacity style={[styles.messageBtn, !canCall && { flex: 1, marginRight: 0 }]} onPress={() => {}}>
-                <Ionicons name="chatbubble-outline" size={18} color="#fff" />
-                <Text style={styles.messageBtnText}>Message</Text>
-              </TouchableOpacity>
-            )}
-            {canCall && (
-              <TouchableOpacity style={[styles.callBtn, !canMessage && { flex: 1 }]} onPress={handleCall}>
-                <Ionicons name="call-outline" size={18} color={BLUE} />
-                <Text style={styles.callBtnText}>Call</Text>
-              </TouchableOpacity>
-            )}
-          </>
+        {hasPhone && (
+          <TouchableOpacity style={styles.callBtn} onPress={handleCall}>
+            <Ionicons name="call-outline" size={18} color={BLUE} />
+            <Text style={styles.callBtnText}>Call</Text>
+          </TouchableOpacity>
         )}
+        <TouchableOpacity style={[styles.messageBtn, !hasPhone && { marginRight: 0 }]}
+          onPress={() => setMsgVisible(true)}>
+          <Ionicons name="chatbubble-outline" size={18} color="#fff" />
+          <Text style={styles.messageBtnText}>Message</Text>
+        </TouchableOpacity>
       </View>
+
+      <MessageModal visible={msgVisible} onClose={() => setMsgVisible(false)} ad={ad} />
     </View>
   );
 }
