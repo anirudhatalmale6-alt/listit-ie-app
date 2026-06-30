@@ -1,22 +1,29 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, Dimensions, Linking, Share, FlatList, Alert,
+  ActivityIndicator, Dimensions, Linking, Share, FlatList, Alert, Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CDN = 'https://d3ste2v8jw54du.cloudfront.net/';
 const API = 'https://api.listit.ie';
 const BLUE = '#1b87f4';
+const THUMB_GAP = 3;
+const THUMB_WIDTH = (SCREEN_WIDTH - THUMB_GAP * 2) / 3;
+const GRID_GAP = 2;
+const GRID_SIZE = (SCREEN_WIDTH - GRID_GAP * 2) / 3;
 
 function ImageGallery({ images }) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [gridMode, setGridMode] = useState(false);
+  const [galleryKey, setGalleryKey] = useState(0);
   const flatListRef = useRef(null);
 
-  const validImages = (images || []).filter(img => img && img.trim && img.trim().length > 0);
+  const validImages = (images || []).filter(img => img && typeof img === 'string' && img.trim().length > 0);
 
   if (validImages.length === 0) {
     return (
@@ -31,6 +38,16 @@ function ImageGallery({ images }) {
     setActiveIndex(idx);
   }, []);
 
+  const openGallery = (index) => {
+    setActiveIndex(index);
+    setGridMode(false);
+    setGalleryKey(k => k + 1);
+    setModalVisible(true);
+  };
+
+  const thumbs = validImages.slice(0, 3);
+  const extraCount = validImages.length - 3;
+
   return (
     <View>
       <FlatList
@@ -42,21 +59,88 @@ function ImageGallery({ images }) {
         onScroll={onScroll}
         scrollEventThrottle={16}
         keyExtractor={(_, i) => String(i)}
-        renderItem={({ item }) => (
-          <Image source={CDN + item} style={galleryStyles.image} contentFit="cover" cachePolicy="memory-disk" />
+        renderItem={({ item, index }) => (
+          <TouchableOpacity activeOpacity={0.95} onPress={() => openGallery(index)}>
+            <Image source={CDN + item} style={galleryStyles.image} contentFit="cover" cachePolicy="memory-disk" />
+          </TouchableOpacity>
         )}
       />
-      {validImages.length > 1 && (
-        <View style={galleryStyles.pagination}>
-          {validImages.map((_, i) => (
-            <View key={i} style={[galleryStyles.dot, i === activeIndex && galleryStyles.activeDot]} />
-          ))}
-        </View>
-      )}
       <View style={galleryStyles.counter}>
         <Ionicons name="camera-outline" size={13} color="#fff" />
         <Text style={galleryStyles.counterText}> {activeIndex + 1}/{validImages.length}</Text>
       </View>
+
+      {validImages.length > 1 && (
+        <View style={galleryStyles.thumbStrip}>
+          {thumbs.map((img, i) => (
+            <TouchableOpacity key={i} style={[galleryStyles.thumbWrap, i < 2 && { marginRight: THUMB_GAP }]}
+              onPress={() => openGallery(i)} activeOpacity={0.8}>
+              <Image source={CDN + img} style={galleryStyles.thumbImage} contentFit="cover" cachePolicy="memory-disk" />
+              {i === 2 && extraCount > 0 && (
+                <View style={galleryStyles.thumbOverlay}>
+                  <Text style={galleryStyles.thumbOverlayText}>+{extraCount}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      <Modal visible={modalVisible} animationType="fade" statusBarTranslucent
+        onRequestClose={() => setModalVisible(false)}>
+        <View style={galleryStyles.modalContainer}>
+          <View style={galleryStyles.modalHeader}>
+            <TouchableOpacity onPress={() => setModalVisible(false)} style={galleryStyles.modalBtn} hitSlop={12}>
+              <Ionicons name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+            {!gridMode && (
+              <Text style={galleryStyles.modalTitle}>Image {activeIndex + 1}/{validImages.length}</Text>
+            )}
+            {gridMode && <View style={{ flex: 1 }} />}
+            <TouchableOpacity onPress={() => setGridMode(!gridMode)} style={galleryStyles.modalBtn} hitSlop={12}>
+              <Ionicons name={gridMode ? 'image-outline' : 'grid-outline'} size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+
+          {gridMode ? (
+            <FlatList
+              data={validImages}
+              numColumns={3}
+              keyExtractor={(_, i) => 'g' + i}
+              contentContainerStyle={{ paddingTop: 4 }}
+              renderItem={({ item, index }) => (
+                <TouchableOpacity
+                  style={[galleryStyles.gridItem, (index % 3 !== 2) && { marginRight: GRID_GAP }, { marginBottom: GRID_GAP }]}
+                  onPress={() => { setActiveIndex(index); setGridMode(false); setGalleryKey(k => k + 1); }}
+                  activeOpacity={0.8}>
+                  <Image source={CDN + item} style={galleryStyles.gridImage} contentFit="cover" cachePolicy="memory-disk" />
+                </TouchableOpacity>
+              )}
+            />
+          ) : (
+            <FlatList
+              key={`swipe-${galleryKey}`}
+              data={validImages}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={activeIndex}
+              getItemLayout={(_, index) => ({ length: SCREEN_WIDTH, offset: SCREEN_WIDTH * index, index })}
+              onScroll={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                if (idx >= 0 && idx < validImages.length) setActiveIndex(idx);
+              }}
+              scrollEventThrottle={16}
+              keyExtractor={(_, i) => 's' + i}
+              renderItem={({ item }) => (
+                <View style={galleryStyles.modalImageWrap}>
+                  <Image source={CDN + item} style={galleryStyles.modalImage} contentFit="contain" cachePolicy="memory-disk" />
+                </View>
+              )}
+            />
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -71,32 +155,11 @@ const galleryStyles = StyleSheet.create({
   },
   image: {
     width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH * 0.7,
-  },
-  pagination: {
-    position: 'absolute',
-    bottom: 12,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    marginHorizontal: 3,
-  },
-  activeDot: {
-    backgroundColor: '#fff',
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    height: SCREEN_WIDTH * 0.75,
   },
   counter: {
     position: 'absolute',
-    bottom: 12,
+    top: SCREEN_WIDTH * 0.75 - 36,
     left: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -109,6 +172,74 @@ const galleryStyles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  thumbStrip: {
+    flexDirection: 'row',
+    marginTop: THUMB_GAP,
+  },
+  thumbWrap: {
+    width: THUMB_WIDTH,
+    height: THUMB_WIDTH * 0.65,
+    overflow: 'hidden',
+  },
+  thumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  thumbOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  thumbOverlayText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 50,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  modalBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  modalImageWrap: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT - 120,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalImage: {
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT - 120,
+  },
+  gridItem: {
+    width: GRID_SIZE,
+    height: GRID_SIZE,
+    overflow: 'hidden',
+  },
+  gridImage: {
+    width: '100%',
+    height: '100%',
   },
 });
 
@@ -234,7 +365,7 @@ function DescriptionSection({ text }) {
 
 function GoogleReviewsSection({ reviews }) {
   const [showAll, setShowAll] = useState(false);
-  if (!reviews || reviews.length === 0) return null;
+  if (!Array.isArray(reviews) || reviews.length === 0) return null;
   const displayed = showAll ? reviews : reviews.slice(0, 2);
 
   return (
@@ -306,17 +437,19 @@ function SellerSection({ ad }) {
   const bgImage = user.bg_image ? (user.bg_image.startsWith('http') ? user.bg_image : CDN + user.bg_image) : null;
 
   const getOpenStatus = () => {
-    if (!user.opening_hours || user.opening_hours.length === 0) return null;
+    if (!Array.isArray(user.opening_hours) || user.opening_hours.length === 0) return null;
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const now = new Date();
     const today = days[now.getDay()];
-    const todayHours = user.opening_hours.find(h => h.day_of_week === today);
+    const todayHours = user.opening_hours.find(h => h && h.day_of_week === today);
     if (!todayHours || todayHours.is_closed) return { open: false, text: 'Closed Today' };
-    const openTime = todayHours.open_time?.substring(0, 5);
-    const closeTime = todayHours.close_time?.substring(0, 5);
+    const openTime = typeof todayHours.open_time === 'string' ? todayHours.open_time.substring(0, 5) : null;
+    const closeTime = typeof todayHours.close_time === 'string' ? todayHours.close_time.substring(0, 5) : null;
+    if (!openTime || !closeTime) return null;
     const nowMins = now.getHours() * 60 + now.getMinutes();
-    const [oh, om] = (openTime || '').split(':').map(Number);
-    const [ch, cm] = (closeTime || '').split(':').map(Number);
+    const [oh, om] = openTime.split(':').map(Number);
+    const [ch, cm] = closeTime.split(':').map(Number);
+    if (isNaN(oh) || isNaN(om) || isNaN(ch) || isNaN(cm)) return null;
     const isOpen = nowMins >= oh * 60 + om && nowMins < ch * 60 + cm;
     return { open: isOpen, text: isOpen ? `Open Now: ${openTime} - ${closeTime}` : `Closed · Opens ${openTime}` };
   };
@@ -719,7 +852,7 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
         <DescriptionSection text={ad.description} />
 
         {/* Attributes */}
-        {ad.attributes && ad.attributes.length > 0 && (
+        {Array.isArray(ad.attributes) && ad.attributes.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Additional Details</Text>
             {ad.attributes.map((attr, i) => (
@@ -745,7 +878,7 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
         <SellerSection ad={ad} />
 
         {/* Google Reviews */}
-        {isDealerAd && adUser.reviews && (
+        {isDealerAd && Array.isArray(adUser.reviews) && adUser.reviews.length > 0 && (
           <GoogleReviewsSection reviews={adUser.reviews} />
         )}
 

@@ -50,41 +50,32 @@ function formatMileage(val) {
 }
 
 const CATEGORY_ICONS = {
-  'cars-and-motors': 'car-sport',
-  'house-diy': 'home',
-  'electronics': 'laptop',
-  'clothes-lifestyle': 'shirt',
-  'sports-hobbies': 'bicycle',
-  'services': 'construct',
-  'jobs': 'briefcase',
-  'baby-kids': 'happy',
-  'animals': 'paw',
-  'farming': 'leaf',
-  'business': 'business',
-  'holidays-tickets': 'airplane',
-  'lost-found': 'search',
-  'music-education': 'musical-notes',
-  'property': 'storefront',
-  'whats-on': 'calendar',
-  'pets': 'paw',
-  'wanted': 'megaphone',
+  'cars-and-motors': { icon: 'car-sport', color: '#1b87f4' },
+  'house-diy': { icon: 'home', color: '#27ae60' },
+  'electronics': { icon: 'laptop', color: '#8e44ad' },
+  'clothes-lifestyle': { icon: 'shirt', color: '#e74c3c' },
+  'sports-hobbies': { icon: 'bicycle', color: '#f39c12' },
+  'services': { icon: 'construct', color: '#2c3e50' },
+  'jobs': { icon: 'briefcase', color: '#16a085' },
+  'baby-kids': { icon: 'happy', color: '#e91e63' },
+  'animals': { icon: 'paw', color: '#795548' },
+  'farming': { icon: 'leaf', color: '#4caf50' },
+  'business': { icon: 'business', color: '#3f51b5' },
+  'holidays-tickets': { icon: 'airplane', color: '#00bcd4' },
+  'lost-found': { icon: 'search', color: '#ff5722' },
+  'music-education': { icon: 'musical-notes', color: '#9c27b0' },
+  'property': { icon: 'storefront', color: '#607d8b' },
+  'whats-on': { icon: 'calendar', color: '#ff9800' },
+  'pets': { icon: 'paw', color: '#795548' },
+  'wanted': { icon: 'megaphone', color: '#f44336' },
 };
 
 const CategoryRow = memo(({ cat, onPress }) => {
-  const iconName = CATEGORY_ICONS[cat.slug] || 'grid-outline';
+  const catInfo = CATEGORY_ICONS[cat.slug] || { icon: 'grid-outline', color: BLUE };
   return (
     <TouchableOpacity style={styles.categoryRow} onPress={() => onPress(cat)} activeOpacity={0.6}>
-      <View style={styles.categoryIconCircle}>
-        {cat.image ? (
-          <Image
-            source={CDN + cat.image}
-            style={styles.categoryIconImage}
-            contentFit="cover"
-            cachePolicy="memory-disk"
-          />
-        ) : (
-          <Ionicons name={iconName} size={22} color={BLUE} />
-        )}
+      <View style={[styles.categoryIconCircle, { backgroundColor: catInfo.color + '18' }]}>
+        <Ionicons name={catInfo.icon} size={22} color={catInfo.color} />
       </View>
       <View style={styles.categoryTextWrap}>
         <Text style={styles.categoryName}>{cat.name}</Text>
@@ -539,18 +530,13 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   categoryIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#f0f4ff',
+    width: 46,
+    height: 46,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
     marginRight: 14,
-  },
-  categoryIconImage: {
-    width: 44,
-    height: 44,
   },
   categoryTextWrap: {
     flex: 1,
