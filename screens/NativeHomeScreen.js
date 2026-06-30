@@ -343,11 +343,8 @@ export default function NativeHomeScreen({ onCategoryPress, onAdPress, onSearchP
       )}
 
       {/* Go Further Section */}
-      <View style={styles.goFurtherSection}>
-        <Text style={styles.goFurtherTitle}>Go Further</Text>
-      </View>
-
       <View style={styles.goFurtherList}>
+        <Text style={styles.goFurtherTitle}>Go Further</Text>
         <TouchableOpacity
           style={styles.goFurtherRow}
           activeOpacity={0.7}
@@ -649,9 +646,13 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#1a1a1a',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 12,
   },
   goFurtherList: {
     backgroundColor: '#fff',
+    marginTop: 24,
   },
   goFurtherRow: {
     flexDirection: 'row',

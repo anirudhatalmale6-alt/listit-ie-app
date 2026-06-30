@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, Dimensions, Linking, Share, FlatList,
+  ActivityIndicator, Dimensions, Linking, Share, FlatList, Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -276,12 +276,18 @@ function SellerSection({ ad }) {
           </TouchableOpacity>
         )}
 
-        {ad.live_ads_count > 0 && (
-          <View style={styles.dealerInfoRow}>
-            <Ionicons name="car-outline" size={16} color="#666" />
-            <Text style={styles.dealerInfoText}>
-              {ad.live_ads_count} Active ads{ad.total_ads_count ? ` · ${ad.total_ads_count} Total ads` : ''}
-            </Text>
+        {(ad.live_ads_count > 0 || ad.total_ads_count > 0) && (
+          <View>
+            <View style={styles.dealerInfoRow}>
+              <Ionicons name="car-outline" size={16} color="#666" />
+              <Text style={styles.dealerInfoText}>
+                {ad.live_ads_count || 0} Active ad{ad.live_ads_count !== 1 ? 's' : ''}{ad.total_ads_count ? `  |  ${ad.total_ads_count} Total ads` : ''}
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.dealerInfoRow}>
+              <Ionicons name="open-outline" size={16} color={BLUE} />
+              <Text style={[styles.dealerInfoText, { color: BLUE, textDecorationLine: 'underline' }]}>View all ads</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -359,6 +365,7 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
   const [ad, setAd] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [relatedAds, setRelatedAds] = useState([]);
 
   useEffect(() => {
     setLoading(true);
@@ -376,6 +383,28 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
       .finally(() => setLoading(false));
   }, [adId]);
 
+  useEffect(() => {
+    if (!ad) return;
+    const user = ad.userDetails || {};
+    const dealer = user.user_type === 'dealer' || user.user_type === 'trader' ||
+      ad.im_trader === 1 || !!ad.business_name || !!ad.dealer_name;
+    const dealerName = ad.business_name || ad.dealer_name || user.business_name;
+    const body = { page: 1, limit: 12 };
+    if (dealer && dealerName) body.keyword = dealerName;
+    fetch(`${API}/api/user/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 1 && data.data?.result) {
+          setRelatedAds(data.data.result.filter(a => a.id !== ad.id).slice(0, 8));
+        }
+      })
+      .catch(() => {});
+  }, [ad]);
+
   const handleCall = useCallback(() => {
     if (ad?.phone) {
       const phoneCode = ad.phone_code || '353';
@@ -391,6 +420,27 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
       });
     } catch (e) {}
   }, [ad]);
+
+  const handleReport = useCallback(() => {
+    Alert.alert('Report this Ad', 'Why are you reporting this ad?', [
+      { text: 'Spam or scam', onPress: () => submitReport('spam') },
+      { text: 'Incorrect information', onPress: () => submitReport('incorrect') },
+      { text: 'Offensive content', onPress: () => submitReport('offensive') },
+      { text: 'Already sold', onPress: () => submitReport('sold') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, []);
+
+  const submitReport = useCallback(async (reason) => {
+    try {
+      await fetch(`${API}/api/user/ads/${adId}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+    } catch (e) {}
+    Alert.alert('Report Submitted', 'Thank you for reporting. We will review this ad.');
+  }, [adId]);
 
   if (loading) {
     return (
@@ -562,13 +612,58 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
 
         {/* Report Ad */}
         <TouchableOpacity style={styles.reportAdRow} activeOpacity={0.7}
-          onPress={() => Linking.openURL(`https://listit.ie/report/${ad.id}`)}>
+          onPress={handleReport}>
           <Ionicons name="flag-outline" size={18} color="#888" />
           <Text style={styles.reportAdText}>Report this Ad</Text>
         </TouchableOpacity>
 
         {/* Seller */}
         <SellerSection ad={ad} />
+
+        {/* Related Ads */}
+        {relatedAds.length > 0 && (
+          <View style={styles.relatedSection}>
+            <Text style={styles.relatedTitle}>
+              {isDealerAd ? 'OUR STOCK' : 'YOU MAY ALSO LIKE'}
+            </Text>
+            <View style={styles.relatedDivider} />
+            <View style={styles.relatedGrid}>
+              {relatedAds.map(item => {
+                const img = item.images?.[0] ? CDN + item.images[0] : null;
+                const p = parseFloat(item.price || 0);
+                const ps = p > 0 ? `€${p.toLocaleString('en-IE')}` : 'Free';
+                const iv = item.vehicleData || {};
+                const sp = [];
+                if (iv.year) sp.push(iv.year);
+                if (iv.engine_size) sp.push(iv.engine_size + 'L');
+                if (iv.fuel_type || iv.fuel) sp.push(iv.fuel_type || iv.fuel);
+                const ml = iv.milage ? parseInt(iv.milage, 10) : null;
+                if (ml) sp.push(ml.toLocaleString('en-IE'));
+                return (
+                  <TouchableOpacity key={item.id} style={styles.relatedCard}
+                    onPress={() => onRelatedAdPress && onRelatedAdPress(item)} activeOpacity={0.7}>
+                    {img ? (
+                      <Image source={img} style={styles.relatedCardImage} contentFit="cover" cachePolicy="memory-disk" />
+                    ) : (
+                      <View style={[styles.relatedCardImage, styles.relatedCardNoImage]}>
+                        <Ionicons name="image-outline" size={28} color="#ccc" />
+                      </View>
+                    )}
+                    <View style={styles.relatedCardBody}>
+                      <Text style={styles.relatedCardTitle} numberOfLines={2}>{item.title}</Text>
+                      {sp.length > 0 && <Text style={styles.relatedCardSpec} numberOfLines={1}>{sp.join(' · ')}</Text>}
+                      <Text style={styles.relatedCardPriceLabel}>Price</Text>
+                      <Text style={styles.relatedCardPrice}>{ps}</Text>
+                    </View>
+                    <TouchableOpacity style={styles.relatedCardHeart} activeOpacity={0.7}>
+                      <Ionicons name="heart-outline" size={18} color="#999" />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -1017,4 +1112,77 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+
+  relatedSection: {
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  relatedTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#888',
+    letterSpacing: 0.5,
+    paddingHorizontal: 16,
+    marginBottom: 8,
+  },
+  relatedDivider: {
+    height: 2,
+    backgroundColor: '#e74c3c',
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  relatedGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    justifyContent: 'space-between',
+  },
+  relatedCard: {
+    width: (SCREEN_WIDTH - 32) / 2,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#f0f0f0',
+  },
+  relatedCardImage: {
+    width: '100%',
+    height: (SCREEN_WIDTH - 32) / 2 * 0.7,
+  },
+  relatedCardNoImage: {
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  relatedCardBody: {
+    padding: 10,
+  },
+  relatedCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    lineHeight: 18,
+  },
+  relatedCardSpec: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 4,
+  },
+  relatedCardPriceLabel: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 8,
+  },
+  relatedCardPrice: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1a1a1a',
+    marginTop: 2,
+  },
+  relatedCardHeart: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+  },
 });
