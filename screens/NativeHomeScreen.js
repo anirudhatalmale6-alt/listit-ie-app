@@ -34,6 +34,14 @@ function getValidImages(images) {
   return images.filter(img => img && img.trim && img.trim().length > 0).map(img => CDN + img);
 }
 
+function formatEngineSize(val) {
+  if (!val) return null;
+  const n = parseFloat(val);
+  if (isNaN(n)) return val;
+  if (n > 100) return (n / 1000).toFixed(1);
+  return n.toFixed(1);
+}
+
 function formatMileage(val) {
   if (!val) return null;
   const n = parseInt(val, 10);
@@ -103,7 +111,7 @@ const AdCard = memo(({ ad, onPress }) => {
   const specParts = [];
   if (isVehicle) {
     if (vd.year) specParts.push(vd.year);
-    if (vd.engine_size) specParts.push(vd.engine_size + 'L');
+    if (vd.engine_size) specParts.push(formatEngineSize(vd.engine_size) + 'L');
     if (vd.fuel) specParts.push(vd.fuel);
     const mileStr = formatMileage(vd.milage);
     if (mileStr) specParts.push(mileStr);

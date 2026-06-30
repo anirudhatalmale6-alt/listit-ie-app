@@ -139,6 +139,14 @@ function DetailRow({ icon, label, value }) {
   );
 }
 
+function formatEngineSize(val) {
+  if (!val) return null;
+  const n = parseFloat(val);
+  if (isNaN(n)) return val;
+  if (n > 100) return (n / 1000).toFixed(1);
+  return n.toFixed(1);
+}
+
 function formatMileage(val) {
   if (!val) return null;
   const n = parseInt(val, 10);
@@ -165,7 +173,7 @@ function VehicleOverview({ data }) {
       <DetailRow icon="speedometer-outline" label="Mileage" value={formatMileage(data.milage)} />
       <DetailRow icon="flash-outline" label="Fuel Type" value={data.fuel_type} />
       <DetailRow icon="cog-outline" label="Transmission" value={data.transmission || data.gearbox} />
-      <DetailRow icon="construct-outline" label="Engine" value={data.engine_size ? `${data.engine_size} L ${data.fuel_type || ''}`.trim() : null} />
+      <DetailRow icon="construct-outline" label="Engine" value={data.engine_size ? `${formatEngineSize(data.engine_size)} L ${data.fuel_type || ''}`.trim() : null} />
       <DetailRow icon="car-sport-outline" label="Body Type" value={data.body_type} />
       <DetailRow icon="people-outline" label="Seats" value={data.number_of_seats} />
       <DetailRow icon="albums-outline" label="Doors" value={data.number_of_doors} />
@@ -224,6 +232,68 @@ function DescriptionSection({ text }) {
   );
 }
 
+function GoogleReviewsSection({ reviews }) {
+  const [showAll, setShowAll] = useState(false);
+  if (!reviews || reviews.length === 0) return null;
+  const displayed = showAll ? reviews : reviews.slice(0, 2);
+
+  return (
+    <View style={styles.section}>
+      <View style={styles.reviewsHeader}>
+        <Ionicons name="star" size={18} color="#f5a623" />
+        <Text style={styles.sectionTitle}>Google Reviews</Text>
+      </View>
+      {displayed.map((review, i) => (
+        <View key={i} style={styles.reviewCard}>
+          <View style={styles.reviewTop}>
+            <View style={styles.reviewAvatar}>
+              <Text style={styles.reviewAvatarText}>
+                {(review.author_name || '?')[0].toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.reviewAuthor}>{review.author_name}</Text>
+              <View style={styles.reviewStarsRow}>
+                {[1, 2, 3, 4, 5].map(s => (
+                  <Ionicons key={s} name="star" size={13} color={s <= review.rating ? '#f5a623' : '#ddd'} />
+                ))}
+                <Text style={styles.reviewTime}> · {review.relative_time_description}</Text>
+              </View>
+            </View>
+          </View>
+          {review.text ? (
+            <Text style={styles.reviewText} numberOfLines={3}>{review.text}</Text>
+          ) : null}
+        </View>
+      ))}
+      {reviews.length > 2 && !showAll && (
+        <TouchableOpacity onPress={() => setShowAll(true)} activeOpacity={0.6}>
+          <Text style={styles.seeMoreReviewsText}>See all {reviews.length} reviews</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+function NotifyMeSection() {
+  const [notified, setNotified] = useState(false);
+  return (
+    <View style={styles.notifySection}>
+      <Text style={styles.notifyText}>Get notified when similar ads are posted</Text>
+      <TouchableOpacity
+        style={[styles.notifyBtn, notified && styles.notifyBtnActive]}
+        onPress={() => setNotified(!notified)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name={notified ? 'notifications' : 'notifications-outline'} size={18} color={notified ? '#fff' : '#333'} />
+        <Text style={[styles.notifyBtnText, notified && { color: '#fff' }]}>
+          {notified ? 'Subscribed' : 'Notify Me'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function SellerSection({ ad }) {
   const user = ad.userDetails || {};
   const isDealer = user.user_type === 'dealer' || user.user_type === 'trader' ||
@@ -233,25 +303,62 @@ function SellerSection({ ad }) {
   const logo = user.logo || user.image;
   const logoUri = logo ? (logo.startsWith('http') ? logo : CDN + logo) : null;
 
+  const bgImage = user.bg_image ? (user.bg_image.startsWith('http') ? user.bg_image : CDN + user.bg_image) : null;
+
+  const getOpenStatus = () => {
+    if (!user.opening_hours || user.opening_hours.length === 0) return null;
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const now = new Date();
+    const today = days[now.getDay()];
+    const todayHours = user.opening_hours.find(h => h.day_of_week === today);
+    if (!todayHours || todayHours.is_closed) return { open: false, text: 'Closed Today' };
+    const openTime = todayHours.open_time?.substring(0, 5);
+    const closeTime = todayHours.close_time?.substring(0, 5);
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    const [oh, om] = (openTime || '').split(':').map(Number);
+    const [ch, cm] = (closeTime || '').split(':').map(Number);
+    const isOpen = nowMins >= oh * 60 + om && nowMins < ch * 60 + cm;
+    return { open: isOpen, text: isOpen ? `Open Now: ${openTime} - ${closeTime}` : `Closed · Opens ${openTime}` };
+  };
+
+  const openStatus = getOpenStatus();
+
   if (isDealer) {
     return (
       <View style={styles.section}>
-        <View style={styles.dealerCard}>
-          {logoUri ? (
-            <Image source={logoUri} style={styles.dealerCardLogo} contentFit="cover" />
-          ) : (
-            <View style={[styles.dealerCardLogo, styles.dealerCardLogoFallback]}>
-              <Ionicons name="storefront" size={22} color={BLUE} />
-            </View>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={styles.dealerCardName}>{sellerName}</Text>
-            <View style={styles.dealerBadgeRow}>
-              <Ionicons name="shield-checkmark" size={14} color="#27ae60" />
-              <Text style={styles.dealerBadgeText}>Verified Dealer</Text>
+        {bgImage ? (
+          <View style={styles.dealerHeroBanner}>
+            <Image source={bgImage} style={styles.dealerHeroBg} contentFit="cover" />
+            <View style={styles.dealerHeroOverlay}>
+              <View style={styles.dealerHeroContent}>
+                {logoUri ? (
+                  <Image source={logoUri} style={styles.dealerHeroLogo} contentFit="cover" />
+                ) : null}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.dealerHeroName}>{sellerName}</Text>
+                  <Text style={styles.dealerHeroSub}>Verified Dealer</Text>
+                </View>
+              </View>
             </View>
           </View>
-        </View>
+        ) : (
+          <View style={styles.dealerCard}>
+            {logoUri ? (
+              <Image source={logoUri} style={styles.dealerCardLogo} contentFit="cover" />
+            ) : (
+              <View style={[styles.dealerCardLogo, styles.dealerCardLogoFallback]}>
+                <Ionicons name="storefront" size={22} color={BLUE} />
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.dealerCardName}>{sellerName}</Text>
+              <View style={styles.dealerBadgeRow}>
+                <Ionicons name="shield-checkmark" size={14} color="#27ae60" />
+                <Text style={styles.dealerBadgeText}>Verified Dealer</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {user.average_rating && parseFloat(user.average_rating) > 0 && (
           <View style={styles.dealerStatsRow}>
@@ -267,6 +374,15 @@ function SellerSection({ ad }) {
           <View style={styles.dealerInfoRow}>
             <Ionicons name="location-outline" size={16} color="#666" />
             <Text style={styles.dealerInfoText}>{user.business_address || ad.business_address || ad.location}</Text>
+          </View>
+        )}
+
+        {openStatus && (
+          <View style={styles.dealerInfoRow}>
+            <Ionicons name="time-outline" size={16} color={openStatus.open ? '#27ae60' : '#e74c3c'} />
+            <Text style={[styles.dealerInfoText, { color: openStatus.open ? '#27ae60' : '#e74c3c', fontWeight: '600' }]}>
+              {openStatus.text}
+            </Text>
           </View>
         )}
 
@@ -390,9 +506,8 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
     const dealer = user.user_type === 'dealer' || user.user_type === 'trader' ||
       user.vendor_type === 'dealer' || !!user.dealer_status ||
       ad.im_trader === 1 || !!ad.business_name || !!ad.dealer_name || !!user.business_name;
-    const dealerName = ad.business_name || ad.dealer_name || user.business_name;
     const body = { page: 1, limit: 12 };
-    if (dealer && dealerName) body.keyword = dealerName;
+    if (dealer && ad.user_id) body.user_id = ad.user_id;
     fetch(`${API}/api/user/search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -561,6 +676,9 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
               </TouchableOpacity>
             </View>
           </View>
+          {price >= 1000 && (
+            <Text style={styles.monthlyPrice}>From €{Math.round(price / 60).toLocaleString('en-IE')}/mo</Text>
+          )}
           {ad.old_price && parseFloat(ad.old_price) > price && (
             <Text style={styles.oldPrice}>Was €{parseFloat(ad.old_price).toLocaleString('en-IE')}</Text>
           )}
@@ -613,6 +731,9 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
           </View>
         )}
 
+        {/* Notify Me */}
+        <NotifyMeSection />
+
         {/* Report Ad */}
         <TouchableOpacity style={styles.reportAdRow} activeOpacity={0.7}
           onPress={handleReport}>
@@ -622,6 +743,11 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
 
         {/* Seller */}
         <SellerSection ad={ad} />
+
+        {/* Google Reviews */}
+        {isDealerAd && adUser.reviews && (
+          <GoogleReviewsSection reviews={adUser.reviews} />
+        )}
 
         {/* Related Ads */}
         {relatedAds.length > 0 && (
@@ -638,7 +764,7 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
                 const iv = item.vehicleData || {};
                 const sp = [];
                 if (iv.year) sp.push(iv.year);
-                if (iv.engine_size) sp.push(iv.engine_size + 'L');
+                if (iv.engine_size) sp.push(formatEngineSize(iv.engine_size) + 'L');
                 if (iv.fuel_type || iv.fuel) sp.push(iv.fuel_type || iv.fuel);
                 const ml = iv.milage ? parseInt(iv.milage, 10) : null;
                 if (ml) sp.push(ml.toLocaleString('en-IE'));
@@ -673,17 +799,40 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
 
       {/* Contact bar with safe area */}
       <View style={[styles.contactBar, { paddingBottom: Math.max(insets.bottom, 16) + 4 }]}>
-        {canMessage && (
-          <TouchableOpacity style={[styles.messageBtn, !canCall && { flex: 1, marginRight: 0 }]} onPress={() => {}}>
-            <Ionicons name="chatbubble-outline" size={18} color="#fff" />
-            <Text style={styles.messageBtnText}>Message</Text>
-          </TouchableOpacity>
-        )}
-        {canCall && (
-          <TouchableOpacity style={[styles.callBtn, !canMessage && { flex: 1 }]} onPress={handleCall}>
-            <Ionicons name="call-outline" size={18} color={BLUE} />
-            <Text style={styles.callBtnText}>Call</Text>
-          </TouchableOpacity>
+        {isDealerAd && adUser.email_contact ? (
+          <>
+            <TouchableOpacity style={styles.contactBtnOutline} onPress={() => Linking.openURL(`mailto:${adUser.email_contact}`)}>
+              <Ionicons name="mail-outline" size={18} color="#333" />
+              <Text style={styles.contactBtnOutlineText}>Email</Text>
+            </TouchableOpacity>
+            {adUser.whatsapp_contact ? (
+              <TouchableOpacity style={styles.contactBtnOutline} onPress={() => Linking.openURL(`https://wa.me/${adUser.whatsapp_contact.replace(/\D/g, '')}`)}>
+                <Ionicons name="logo-whatsapp" size={18} color="#25d366" />
+                <Text style={styles.contactBtnOutlineText}>WhatsApp</Text>
+              </TouchableOpacity>
+            ) : null}
+            {canCall && (
+              <TouchableOpacity style={styles.contactBtnPrimary} onPress={handleCall}>
+                <Ionicons name="call-outline" size={18} color="#fff" />
+                <Text style={styles.contactBtnPrimaryText}>Call</Text>
+              </TouchableOpacity>
+            )}
+          </>
+        ) : (
+          <>
+            {canMessage && (
+              <TouchableOpacity style={[styles.messageBtn, !canCall && { flex: 1, marginRight: 0 }]} onPress={() => {}}>
+                <Ionicons name="chatbubble-outline" size={18} color="#fff" />
+                <Text style={styles.messageBtnText}>Message</Text>
+              </TouchableOpacity>
+            )}
+            {canCall && (
+              <TouchableOpacity style={[styles.callBtn, !canMessage && { flex: 1 }]} onPress={handleCall}>
+                <Ionicons name="call-outline" size={18} color={BLUE} />
+                <Text style={styles.callBtnText}>Call</Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </View>
     </View>
@@ -765,6 +914,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  monthlyPrice: {
+    fontSize: 15,
+    color: BLUE,
+    fontWeight: '600',
+    marginTop: 4,
   },
   oldPrice: {
     fontSize: 15,
@@ -914,6 +1069,49 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  // Dealer hero banner (with bg_image)
+  dealerHeroBanner: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    height: 140,
+    marginBottom: 14,
+    position: 'relative',
+  },
+  dealerHeroBg: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  dealerHeroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+    padding: 16,
+  },
+  dealerHeroContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  dealerHeroLogo: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  dealerHeroName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  dealerHeroSub: {
+    fontSize: 13,
+    color: '#27ae60',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+
   // Dealer card (in seller section)
   dealerCard: {
     flexDirection: 'row',
@@ -973,6 +1171,98 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#555',
     flex: 1,
+  },
+
+  // Google Reviews
+  reviewsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  reviewCard: {
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#f0f0f0',
+  },
+  reviewTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  reviewAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#e8f0fe',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reviewAvatarText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: BLUE,
+  },
+  reviewAuthor: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  reviewStarsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  reviewTime: {
+    fontSize: 12,
+    color: '#999',
+  },
+  reviewText: {
+    fontSize: 14,
+    color: '#555',
+    lineHeight: 20,
+    marginTop: 8,
+  },
+  seeMoreReviewsText: {
+    fontSize: 15,
+    color: BLUE,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+
+  // Notify Me
+  notifySection: {
+    padding: 16,
+    backgroundColor: '#f8fafc',
+    borderBottomWidth: 8,
+    borderBottomColor: '#f5f5f5',
+    alignItems: 'center',
+  },
+  notifyText: {
+    fontSize: 15,
+    color: '#555',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  notifyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#333',
+  },
+  notifyBtnActive: {
+    backgroundColor: BLUE,
+    borderColor: BLUE,
+  },
+  notifyBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
   },
 
   // Report Ad
@@ -1102,6 +1392,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     marginLeft: 8,
+  },
+  contactBtnOutline: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#ddd',
+    marginRight: 6,
+    gap: 6,
+  },
+  contactBtnOutlineText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#333',
+  },
+  contactBtnPrimary: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BLUE,
+    paddingVertical: 14,
+    borderRadius: 10,
+    gap: 6,
+  },
+  contactBtnPrimaryText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#fff',
   },
 
   // Error
