@@ -185,7 +185,7 @@ function OwnershipHistory({ data }) {
       <DetailRow icon="document-text-outline" label="NCT Expiry" value={formatDate(data.nct_expiry)} />
       <DetailRow icon="receipt-outline" label="Tax Expiry" value={formatDate(data.tax_expiry)} />
       <DetailRow icon="card-outline" label="Registration" value={data.registration_number} />
-      <DetailRow icon="finger-print-outline" label="VIN" value={data.VIN} />
+      <DetailRow icon="finger-print-outline" label="VIN" value={data.VIN ? '***********' + data.VIN.slice(-4) : null} />
     </CollapsibleSection>
   );
 }
@@ -227,7 +227,8 @@ function DescriptionSection({ text }) {
 function SellerSection({ ad }) {
   const user = ad.userDetails || {};
   const isDealer = user.user_type === 'dealer' || user.user_type === 'trader' ||
-    ad.im_trader === 1 || !!ad.business_name || !!ad.dealer_name;
+    user.vendor_type === 'dealer' || !!user.dealer_status ||
+    ad.im_trader === 1 || !!ad.business_name || !!ad.dealer_name || !!user.business_name;
   const sellerName = ad.business_name || ad.dealer_name || user.business_name || ad.full_name || 'Seller';
   const logo = user.logo || user.image;
   const logoUri = logo ? (logo.startsWith('http') ? logo : CDN + logo) : null;
@@ -387,7 +388,8 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
     if (!ad) return;
     const user = ad.userDetails || {};
     const dealer = user.user_type === 'dealer' || user.user_type === 'trader' ||
-      ad.im_trader === 1 || !!ad.business_name || !!ad.dealer_name;
+      user.vendor_type === 'dealer' || !!user.dealer_status ||
+      ad.im_trader === 1 || !!ad.business_name || !!ad.dealer_name || !!user.business_name;
     const dealerName = ad.business_name || ad.dealer_name || user.business_name;
     const body = { page: 1, limit: 12 };
     if (dealer && dealerName) body.keyword = dealerName;
@@ -490,8 +492,9 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
   const isVehicle = ad.is_vehicle === 1 && vd && vd.found !== false;
   const adUser = ad.userDetails || {};
   const isDealerAd = adUser.user_type === 'dealer' || adUser.user_type === 'trader' ||
-    ad.im_trader === 1 || !!ad.business_name || !!ad.dealer_name;
-  const dealerDisplayName = ad.business_name || ad.dealer_name || adUser.business_name || ad.full_name || '';
+    adUser.vendor_type === 'dealer' || !!adUser.dealer_status ||
+    ad.im_trader === 1 || !!ad.business_name || !!ad.dealer_name || !!adUser.business_name;
+  const dealerDisplayName = ad.business_name || ad.dealer_name || adUser.business_name || ad.full_name || adUser.name || '';
   const dealerLogo = adUser.logo || adUser.image;
 
   return (
