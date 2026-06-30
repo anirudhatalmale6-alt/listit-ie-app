@@ -9,11 +9,11 @@ import { Ionicons } from '@expo/vector-icons';
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.25;
 const SWIPE_OUT_DURATION = 250;
-const API_URL = 'https://listit.ie/api/user/search';
+const API_URL = 'https://api.listit.ie/api/user/search';
 const IMG_BASE = 'https://d3ste2v8jw54du.cloudfront.net/';
 const STORAGE_KEY = '@listit_saved_ads';
 
-export default function SwipeScreen({ onSavedCountChange }) {
+export default function SwipeScreen({ onSavedCountChange, onOpenAd }) {
   const [ads, setAds] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -37,8 +37,9 @@ export default function SwipeScreen({ onSavedCountChange }) {
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (data.result && data.result.length > 0) {
-        const fresh = data.result.filter(a => !seenIds.current.has(a.id));
+      const results = (data.data && data.data.result) || data.result || [];
+      if (results.length > 0) {
+        const fresh = results.filter(a => !seenIds.current.has(a.id));
         fresh.forEach(a => seenIds.current.add(a.id));
         if (fresh.length === 0) {
           setNoMore(true);

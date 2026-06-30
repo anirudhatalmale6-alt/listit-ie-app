@@ -1,10 +1,15 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { StatusBar, BackHandler, Platform, View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, ScrollView, Animated, Image } from 'react-native';
+import React, { useRef, useState, useCallback } from 'react';
+import { StatusBar, Platform, View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, ScrollView, Image, Linking, Dimensions } from 'react-native';
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { WebView } from 'react-native-webview';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import SwipeScreen from './screens/SwipeScreen';
 import SavedScreen from './screens/SavedScreen';
+import NativeHomeScreen from './screens/NativeHomeScreen';
+import NativeSearchScreen from './screens/NativeSearchScreen';
+import NativeAdDetailScreen from './screens/NativeAdDetailScreen';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -43,180 +48,70 @@ class ErrorBoundary extends React.Component {
 const BASE_URL = 'https://listit.ie';
 const LISTIT_BLUE = '#1b87f4';
 const NAV_BG = '#2c2c2e';
-const TAB_BAR_HEIGHT = 60;
-
-const TAB_URLS = {
-  Browse: BASE_URL,
-  'Place Ad': `${BASE_URL}/user/ads/create`,
-  Messages: `${BASE_URL}/user/messages`,
-  'My Profile': `${BASE_URL}/user/profile`,
-};
 
 const TAB_ICONS = {
   Browse: ['search', 'search-outline'],
-  Discover: ['flame', 'flame-outline'],
-  Saved: ['heart', 'heart-outline'],
+  Discover: ['compass', 'compass-outline'],
   'Place Ad': ['pricetag', 'pricetag-outline'],
+  Messages: ['chatbubbles', 'chatbubbles-outline'],
   'My Profile': ['person', 'person-outline'],
 };
 
-const WEB_TABS = new Set(['Browse', 'Place Ad', 'Messages', 'My Profile']);
+const WEBVIEW_TABS = new Set(['Place Ad', 'Messages', 'My Profile']);
+
+const INJECTED_CSS_EARLY = `
+  (function() {
+    var s = document.createElement('style');
+    s.id = 'listit-app-early';
+    s.textContent = [
+      'nav.navbar,.navbar,header,.site-header,.top-header,.navbar-wrapper,.header-wrapper,[class*="navbar"],.navigation-bar,.nav-container{display:none!important;height:0!important;overflow:hidden!important}',
+      'footer,.footer,.site-footer,.footer-wrapper,.footer-section,[class*="footer-"]{display:none!important;height:0!important;overflow:hidden!important}',
+      'body{padding-bottom:80px!important;padding-top:0!important;margin-top:0!important}',
+      '#root>div>div,#root>div>div>div{padding-top:0!important;margin-top:0!important}',
+      'img{content-visibility:visible!important;opacity:1!important}',
+      '.saveSearchComponent{display:none!important}',
+      '.floatingbox{bottom:75px!important}',
+    ].join('');
+    (document.head || document.documentElement).appendChild(s);
+    true;
+  })();
+`;
 
 const INJECTED_JS = `
   (function() {
     var style = document.createElement('style');
-    style.textContent = \`
-      body {
-        overflow-x: hidden !important;
-        padding-bottom: 70px !important;
-      }
-      * { -webkit-tap-highlight-color: transparent; }
-
-      /* Force all images visible - WebView onLoad events can fail */
-      img, .card-img-top {
-        opacity: 1 !important;
-      }
-
-      /* Compact website navbar in app */
-      nav.navbar, .navbar {
-        padding: 5px 0 !important;
-        position: relative !important;
-      }
-
-
-      /* Smooth page transitions */
-      #root {
-        transition: transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1), opacity 0.25s ease;
-        will-change: transform, opacity;
-      }
-      #root.slide-out-left {
-        transform: translateX(-30%);
-        opacity: 0.3;
-      }
-      #root.slide-in-right {
-        transform: translateX(100%);
-        opacity: 0;
-      }
-      #root.slide-out-right {
-        transform: translateX(30%);
-        opacity: 0.3;
-      }
-      #root.slide-in-left {
-        transform: translateX(-100%);
-        opacity: 0;
-      }
-    \`;
+    style.textContent = [
+      'body{overflow-x:hidden!important;padding-bottom:80px!important;padding-top:0!important;margin-top:0!important}',
+      '*{-webkit-tap-highlight-color:transparent}',
+      'nav.navbar,.navbar,header,.site-header,.top-header,.navbar-wrapper,.header-wrapper,[class*="navbar"],.navigation-bar,.nav-container{display:none!important;height:0!important;overflow:hidden!important}',
+      'footer,.footer,.site-footer,.footer-wrapper,.footer-section,[class*="footer-"]{display:none!important;height:0!important;overflow:hidden!important}',
+      '#root>div>div:first-child{padding-top:0!important;margin-top:0!important}',
+      '.floatingbox{bottom:75px!important}',
+      '.saveSearchComponent{display:none!important}',
+    ].join('');
     document.head.appendChild(style);
 
-    // Smooth page transition helper
-    var isNavigating = false;
-    function slideTransition(direction) {
-      if (isNavigating) return;
-      isNavigating = true;
+    function removeTopPadding() {
       var root = document.getElementById('root');
-      if (!root) { isNavigating = false; return; }
-
-      // Slide out current page
-      root.classList.add(direction === 'forward' ? 'slide-out-left' : 'slide-out-right');
-
-      setTimeout(function() {
-        // Instantly position new page off-screen on the other side
-        root.style.transition = 'none';
-        root.classList.remove('slide-out-left', 'slide-out-right');
-        root.classList.add(direction === 'forward' ? 'slide-in-right' : 'slide-in-left');
-
-        // Force reflow
-        root.offsetHeight;
-
-        // Slide new page in
-        root.style.transition = '';
-        root.classList.remove('slide-in-right', 'slide-in-left');
-
-        setTimeout(function() { isNavigating = false; }, 300);
-      }, 200);
-    }
-
-    // Force images visible after page load
-    function forceImagesVisible() {
-      var imgs = document.querySelectorAll('img');
-      for (var i = 0; i < imgs.length; i++) {
-        imgs[i].style.setProperty('opacity', '1', 'important');
-      }
-    }
-    setTimeout(forceImagesVisible, 1000);
-    setTimeout(forceImagesVisible, 3000);
-    setTimeout(forceImagesVisible, 6000);
-
-    // Scroll detection for tab bar hide/show
-    var lastScrollY = 0;
-    var scrollDelta = 0;
-    var tabBarHidden = false;
-    var scrollThreshold = 50;
-
-    window.addEventListener('scroll', function() {
-      var currentY = window.scrollY || document.documentElement.scrollTop;
-      var diff = currentY - lastScrollY;
-      lastScrollY = currentY;
-
-      if (currentY <= 10) {
-        if (tabBarHidden) {
-          tabBarHidden = false;
-          window.ReactNativeWebView.postMessage(JSON.stringify({type: 'scroll', direction: 'up'}));
+      if (!root) return;
+      var walk = function(el, depth) {
+        if (depth > 5) return;
+        var children = el.children;
+        for (var i = 0; i < children.length; i++) {
+          var c = children[i];
+          var cs = window.getComputedStyle(c);
+          var pt = parseInt(cs.paddingTop);
+          var mt = parseInt(cs.marginTop);
+          if (pt >= 40) c.style.setProperty('padding-top', '0px', 'important');
+          if (mt >= 40) c.style.setProperty('margin-top', '0px', 'important');
+          walk(c, depth + 1);
         }
-        scrollDelta = 0;
-        return;
-      }
-
-      scrollDelta += diff;
-
-      if (scrollDelta > scrollThreshold && !tabBarHidden) {
-        tabBarHidden = true;
-        window.ReactNativeWebView.postMessage(JSON.stringify({type: 'scroll', direction: 'down'}));
-        scrollDelta = 0;
-      } else if (scrollDelta < -scrollThreshold && tabBarHidden) {
-        tabBarHidden = false;
-        window.ReactNativeWebView.postMessage(JSON.stringify({type: 'scroll', direction: 'up'}));
-        scrollDelta = 0;
-      }
-
-      if (Math.abs(scrollDelta) > scrollThreshold * 2) {
-        scrollDelta = 0;
-      }
-    }, { passive: true });
-
-    // Move fixed-bottom elements above tab bar - runs continuously
-    function fixFloatingElements() {
-      var els = document.querySelectorAll('*');
-      for (var i = 0; i < els.length; i++) {
-        var cs = window.getComputedStyle(els[i]);
-        if (cs.position === 'fixed' && cs.display !== 'none') {
-          var bot = parseInt(cs.bottom);
-          if (bot >= 0 && bot < 65 && els[i].offsetHeight > 0) {
-            els[i].style.setProperty('bottom', '75px', 'important');
-          }
-        }
-      }
-      forceImagesVisible();
+      };
+      walk(root, 0);
     }
-
-    setTimeout(fixFloatingElements, 1500);
-    setTimeout(fixFloatingElements, 3000);
-    setTimeout(fixFloatingElements, 6000);
-    setInterval(fixFloatingElements, 4000);
-
-    // Reduce excessive top padding on home/search but keep navbar visible
-    setTimeout(function() {
-      if (location.pathname === '/' || location.pathname.startsWith('/search')) {
-        var divs = document.querySelectorAll('#root > div > div:first-child');
-        for (var i = 0; i < divs.length; i++) {
-          var pt = parseInt(window.getComputedStyle(divs[i]).paddingTop);
-          if (pt >= 60) {
-            divs[i].style.paddingTop = '10px';
-            break;
-          }
-        }
-      }
-    }, 1500);
+    setTimeout(removeTopPadding, 300);
+    setTimeout(removeTopPadding, 1000);
+    setTimeout(removeTopPadding, 3000);
 
     var cookieCheck = setInterval(function() {
       var btns = document.querySelectorAll('button');
@@ -228,68 +123,120 @@ const INJECTED_JS = `
       }
     }, 500);
     setTimeout(function() { clearInterval(cookieCheck); }, 5000);
-
-    // Smooth transitions on navigation
-    var pushState = history.pushState;
-    history.pushState = function() {
-      slideTransition('forward');
-      pushState.apply(history, arguments);
-      window.ReactNativeWebView.postMessage(JSON.stringify({type: 'nav', url: location.href}));
-      setTimeout(fixFloatingElements, 1000);
-      setTimeout(forceImagesVisible, 500);
-      setTimeout(forceImagesVisible, 2000);
-      tabBarHidden = false;
-      window.ReactNativeWebView.postMessage(JSON.stringify({type: 'scroll', direction: 'up'}));
-    };
-    window.addEventListener('popstate', function() {
-      slideTransition('back');
-      window.ReactNativeWebView.postMessage(JSON.stringify({type: 'nav', url: location.href}));
-      setTimeout(fixFloatingElements, 1000);
-      setTimeout(forceImagesVisible, 500);
-      setTimeout(forceImagesVisible, 2000);
-      tabBarHidden = false;
-      window.ReactNativeWebView.postMessage(JSON.stringify({type: 'scroll', direction: 'up'}));
-    });
-
-    // MutationObserver to catch dynamically loaded images
-    var observer = new MutationObserver(function(mutations) {
-      for (var i = 0; i < mutations.length; i++) {
-        var added = mutations[i].addedNodes;
-        for (var j = 0; j < added.length; j++) {
-          if (added[j].tagName === 'IMG') {
-            added[j].style.setProperty('opacity', '1', 'important');
-          }
-          if (added[j].querySelectorAll) {
-            var imgs = added[j].querySelectorAll('img');
-            for (var k = 0; k < imgs.length; k++) {
-              imgs[k].style.setProperty('opacity', '1', 'important');
-            }
-          }
-        }
-      }
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-
     true;
   })();
 `;
 
-function CustomTabBar({ activeTab, onTabPress, savedCount, translateY }) {
+const BrowseStack = createNativeStackNavigator();
+
+function HomeScreen({ navigation, onLoginPress }) {
+  const handleCategoryPress = useCallback((path) => {
+    const slug = path.replace(/^\//, '');
+    navigation.push('Search', {
+      categorySlug: slug,
+      categoryName: slug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+    });
+  }, [navigation]);
+
+  const handleAdPress = useCallback((ad) => {
+    if (ad && ad.id) navigation.push('Detail', { adId: ad.id });
+  }, [navigation]);
+
+  const handleSearchPress = useCallback((path) => {
+    const match = path.match(/keyword=([^&]+)/);
+    const keyword = match ? decodeURIComponent(match[1]) : '';
+    if (path === '/all') {
+      navigation.push('Search', { categorySlug: null, categoryName: 'All Ads' });
+    } else {
+      navigation.push('Search', { categorySlug: null, categoryName: keyword || 'Search', keyword });
+    }
+  }, [navigation]);
+
+  return (
+    <NativeHomeScreen
+      onCategoryPress={handleCategoryPress}
+      onAdPress={handleAdPress}
+      onSearchPress={handleSearchPress}
+      onLoginPress={onLoginPress}
+    />
+  );
+}
+
+function SearchScreen({ route, navigation }) {
+  const handleAdPress = useCallback((ad) => {
+    if (ad && ad.id) navigation.push('Detail', { adId: ad.id });
+  }, [navigation]);
+
+  const handleBack = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
+
+  return (
+    <NativeSearchScreen
+      categorySlug={route.params?.categorySlug}
+      categoryName={route.params?.categoryName}
+      keyword={route.params?.keyword}
+      onAdPress={handleAdPress}
+      onBack={handleBack}
+    />
+  );
+}
+
+function DetailScreen({ route, navigation }) {
+  const handleBack = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
+
+  return (
+    <NativeAdDetailScreen
+      adId={route.params?.adId}
+      onBack={handleBack}
+    />
+  );
+}
+
+function BrowseNavigator({ onLoginPress, onScreenChange }) {
+  return (
+    <BrowseStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+        animationDuration: 300,
+        contentStyle: { backgroundColor: '#f5f5f5' },
+      }}
+      screenListeners={{
+        state: (e) => {
+          const routes = e.data?.state?.routes;
+          if (routes && routes.length > 0) {
+            onScreenChange?.(routes[routes.length - 1].name);
+          }
+        },
+      }}
+    >
+      <BrowseStack.Screen name="Home">
+        {(props) => <HomeScreen {...props} onLoginPress={onLoginPress} />}
+      </BrowseStack.Screen>
+      <BrowseStack.Screen name="Search" component={SearchScreen} />
+      <BrowseStack.Screen name="Detail" component={DetailScreen} />
+    </BrowseStack.Navigator>
+  );
+}
+
+function CustomTabBar({ activeTab, onTabPress, savedCount }) {
   const insets = useSafeAreaInsets();
-  const tabs = ['Browse', 'Discover', 'Saved', 'Place Ad', 'My Profile'];
+  const tabs = ['Browse', 'Discover', 'Place Ad', 'Messages', 'My Profile'];
   const bottomPad = Math.max(insets.bottom, 16);
 
   return (
-    <Animated.View style={{
+    <View style={{
       flexDirection: 'row',
       backgroundColor: NAV_BG,
       paddingTop: 10,
       paddingBottom: bottomPad,
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      transform: [{ translateY }],
+      zIndex: 100,
+      elevation: 100,
     }}>
       {tabs.map((tab) => {
         const isFocused = activeTab === tab;
@@ -303,193 +250,197 @@ function CustomTabBar({ activeTab, onTabPress, savedCount, translateY }) {
             style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}
             activeOpacity={0.7}
           >
-            <View>
-              <Ionicons name={iconName} size={22} color={color} />
-              {tab === 'Saved' && savedCount > 0 && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{savedCount > 99 ? '99+' : savedCount}</Text>
-                </View>
-              )}
-            </View>
+            <Ionicons name={iconName} size={22} color={color} />
             <Text style={{ color, fontSize: 10, fontWeight: '500', marginTop: 3 }}>{tab}</Text>
           </TouchableOpacity>
         );
       })}
-    </Animated.View>
+    </View>
+  );
+}
+
+function AppHeader({ onLoginPress }) {
+  return (
+    <View style={styles.appHeader}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Image source={require('./assets/splash-icon.png')} style={{ width: 30, height: 30 }} resizeMode="contain" />
+        <Text style={{ fontSize: 20, fontWeight: '800', color: LISTIT_BLUE, marginLeft: 6 }}>Listit</Text>
+      </View>
+      <TouchableOpacity onPress={onLoginPress} activeOpacity={0.7}>
+        <Text style={{ fontSize: 16, fontWeight: '600', color: '#333' }}>Log In</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
 export default function App() {
+  const navigationRef = useNavigationContainerRef();
   const webViewRef = useRef(null);
   const [activeTab, setActiveTab] = useState('Browse');
-  const [loading, setLoading] = useState(true);
-  const [currentUrl, setCurrentUrl] = useState(BASE_URL);
+  const [browseRoute, setBrowseRoute] = useState('Home');
   const [savedCount, setSavedCount] = useState(0);
-  const canGoBackRef = useRef(false);
-  const tabBarTranslateY = useRef(new Animated.Value(0)).current;
-  const tabBarVisible = useRef(true);
+  const [webViewLoading, setWebViewLoading] = useState(true);
 
-  useEffect(() => {
-    if (Platform.OS === 'android') {
-      const handler = BackHandler.addEventListener('hardwareBackPress', () => {
-        if (WEB_TABS.has(activeTab) && webViewRef.current && canGoBackRef.current) {
-          webViewRef.current.goBack();
-          return true;
-        }
-        if (!WEB_TABS.has(activeTab)) {
-          setActiveTab('Browse');
-          return true;
-        }
-        if (WEB_TABS.has(activeTab) && activeTab !== 'Browse') {
-          setActiveTab('Browse');
-          if (webViewRef.current) {
-            webViewRef.current.injectJavaScript(`window.location.href = '${BASE_URL}'; true;`);
-          }
-          return true;
-        }
-        return false;
-      });
-      return () => handler.remove();
-    }
-  }, [activeTab]);
+  const handleOpenAd = useCallback((adId) => {
+    setActiveTab('Browse');
+    setTimeout(() => {
+      navigationRef.current?.navigate('Detail', { adId });
+    }, 50);
+  }, [navigationRef]);
 
   const handleTabPress = useCallback((tab) => {
+    if (tab === 'Browse' && activeTab === 'Browse') {
+      navigationRef.current?.reset({ index: 0, routes: [{ name: 'Home' }] });
+      setBrowseRoute('Home');
+      return;
+    }
     setActiveTab(tab);
-    if (WEB_TABS.has(tab) && TAB_URLS[tab] && webViewRef.current) {
-      webViewRef.current.injectJavaScript(`window.location.href = '${TAB_URLS[tab]}'; true;`);
+    if (WEBVIEW_TABS.has(tab) && webViewRef.current) {
+      const urls = {
+        'Place Ad': `${BASE_URL}/user/ads/create`,
+        'Messages': `${BASE_URL}/user/messages`,
+        'My Profile': `${BASE_URL}/user/profile`,
+      };
+      if (urls[tab]) {
+        webViewRef.current.injectJavaScript(`window.location.href = '${urls[tab]}'; true;`);
+      }
     }
-    if (!tabBarVisible.current) {
-      tabBarVisible.current = true;
-      Animated.spring(tabBarTranslateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 12 }).start();
-    }
-  }, [tabBarTranslateY]);
+  }, [activeTab, navigationRef]);
 
-  const handleOpenAd = useCallback((adUrl) => {
-    setActiveTab('Browse');
+  const handleLoginPress = useCallback(() => {
+    setActiveTab('My Profile');
     if (webViewRef.current) {
-      webViewRef.current.injectJavaScript(`window.location.href = '${adUrl}'; true;`);
+      webViewRef.current.injectJavaScript(`window.location.href = '${BASE_URL}/login'; true;`);
     }
   }, []);
 
-  const handleWebViewMessage = useCallback((event) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'scroll') {
-        if (data.direction === 'down' && tabBarVisible.current) {
-          tabBarVisible.current = false;
-          Animated.spring(tabBarTranslateY, { toValue: TAB_BAR_HEIGHT + 30, useNativeDriver: true, tension: 80, friction: 12 }).start();
-        } else if (data.direction === 'up' && !tabBarVisible.current) {
-          tabBarVisible.current = true;
-          Animated.spring(tabBarTranslateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 12 }).start();
-        }
-      }
-    } catch (e) {}
-  }, [tabBarTranslateY]);
-
-  const isWebTab = WEB_TABS.has(activeTab);
+  const isWebViewTab = WEBVIEW_TABS.has(activeTab);
+  const showBrowse = activeTab === 'Browse';
 
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-        <MainContent
-          webViewRef={webViewRef}
-          loading={loading}
-          setLoading={setLoading}
-          currentUrl={currentUrl}
-          setCurrentUrl={setCurrentUrl}
-          activeTab={activeTab}
-          isWebTab={isWebTab}
-          handleTabPress={handleTabPress}
-          handleOpenAd={handleOpenAd}
-          savedCount={savedCount}
-          setSavedCount={setSavedCount}
-          canGoBackRef={canGoBackRef}
-          tabBarTranslateY={tabBarTranslateY}
-          onWebViewMessage={handleWebViewMessage}
-        />
+        <NavigationContainer ref={navigationRef}>
+          <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+          <View style={{ flex: 1, backgroundColor: '#fff' }}>
+            <SafeAreaContent
+              activeTab={activeTab}
+              showBrowse={showBrowse}
+              isWebViewTab={isWebViewTab}
+              webViewRef={webViewRef}
+              webViewLoading={webViewLoading}
+              setWebViewLoading={setWebViewLoading}
+              handleLoginPress={handleLoginPress}
+              handleOpenAd={handleOpenAd}
+              setSavedCount={setSavedCount}
+              onBrowseScreenChange={setBrowseRoute}
+            />
+            {!(showBrowse && browseRoute !== 'Home') && (
+              <CustomTabBar
+                activeTab={activeTab}
+                onTabPress={handleTabPress}
+                savedCount={savedCount}
+              />
+            )}
+          </View>
+        </NavigationContainer>
       </SafeAreaProvider>
     </ErrorBoundary>
   );
 }
 
-function MainContent({
-  webViewRef, loading, setLoading, currentUrl, setCurrentUrl,
-  activeTab, isWebTab, handleTabPress, handleOpenAd, savedCount, setSavedCount,
-  canGoBackRef, tabBarTranslateY, onWebViewMessage,
+function SafeAreaContent({
+  activeTab, showBrowse, isWebViewTab,
+  webViewRef, webViewLoading, setWebViewLoading,
+  handleLoginPress, handleOpenAd, setSavedCount,
+  onBrowseScreenChange,
 }) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#fff' }}>
-      <View style={{ flex: 1, paddingTop: insets.top }}>
-        <View style={{ flex: isWebTab ? 1 : 0, height: isWebTab ? undefined : 0, overflow: 'hidden' }}>
-          {loading && isWebTab && (
-            <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color={LISTIT_BLUE} />
-            </View>
-          )}
-          <WebView
-            ref={webViewRef}
-            source={{ uri: BASE_URL }}
-            style={{ flex: 1, opacity: (loading && isWebTab) ? 0 : 1 }}
-            injectedJavaScript={INJECTED_JS}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            startInLoadingState={false}
-            allowsBackForwardNavigationGestures={true}
-            allowsInlineMediaPlayback={true}
-            mediaPlaybackRequiresUserAction={false}
-            sharedCookiesEnabled={true}
-            cacheEnabled={true}
-            cacheMode="LOAD_DEFAULT"
-            thirdPartyCookiesEnabled={true}
-            onLoadStart={() => {
-              setLoading(true);
-              setTimeout(() => setLoading(false), 4000);
-            }}
-            onLoadEnd={() => setLoading(false)}
-            onError={() => setLoading(false)}
-            onHttpError={() => setLoading(false)}
-            onNavigationStateChange={(navState) => {
-              setCurrentUrl(navState.url);
-              canGoBackRef.current = navState.canGoBack;
-            }}
-            onMessage={onWebViewMessage}
-            userAgent="Mozilla/5.0 (Linux; Android 15; OnePlus) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36 ListitApp/1.1"
-          />
-        </View>
-
-        {activeTab === 'Discover' && (
-          <SwipeScreen onSavedCountChange={setSavedCount} />
-        )}
-        {activeTab === 'Saved' && (
-          <SavedScreen onOpenAd={handleOpenAd} onSavedCountChange={setSavedCount} />
-        )}
+    <View style={{ flex: 1, paddingTop: insets.top }}>
+      {/* Browse - native stack navigator (OS-level transitions) */}
+      <View style={[StyleSheet.absoluteFill, { top: insets.top, zIndex: showBrowse ? 2 : 0, opacity: showBrowse ? 1 : 0 }]} pointerEvents={showBrowse ? 'auto' : 'none'}>
+        <BrowseNavigator onLoginPress={handleLoginPress} onScreenChange={onBrowseScreenChange} />
       </View>
-      <CustomTabBar
-        activeTab={activeTab}
-        onTabPress={handleTabPress}
-        savedCount={savedCount}
-        translateY={tabBarTranslateY}
-      />
+
+      {/* WebView for Place Ad, Messages, Profile */}
+      <View style={{ flex: isWebViewTab ? 1 : 0, height: isWebViewTab ? undefined : 0, overflow: 'hidden' }}>
+        <AppHeader onLoginPress={handleLoginPress} />
+        {webViewLoading && isWebViewTab && (
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color={LISTIT_BLUE} />
+          </View>
+        )}
+        <WebView
+          ref={webViewRef}
+          source={{ uri: `${BASE_URL}/user/ads/create` }}
+          style={{ flex: 1, opacity: (webViewLoading && isWebViewTab) ? 0 : 1 }}
+          injectedJavaScriptBeforeContentLoaded={INJECTED_CSS_EARLY}
+          injectedJavaScript={INJECTED_JS}
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          startInLoadingState={false}
+          allowsInlineMediaPlayback={true}
+          mediaPlaybackRequiresUserAction={false}
+          sharedCookiesEnabled={true}
+          cacheEnabled={true}
+          cacheMode="LOAD_DEFAULT"
+          mixedContentMode="compatibility"
+          textZoom={100}
+          overScrollMode="never"
+          androidLayerType="hardware"
+          thirdPartyCookiesEnabled={true}
+          javaScriptCanOpenWindowsAutomatically={true}
+          setSupportMultipleWindows={true}
+          onOpenWindow={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            const targetUrl = nativeEvent?.targetUrl;
+            if (targetUrl) {
+              if (targetUrl.includes('accounts.google.com') || targetUrl.includes('facebook.com/login') || targetUrl.includes('appleid.apple.com')) {
+                Linking.openURL(targetUrl);
+              } else {
+                webViewRef.current?.injectJavaScript(`window.location.href = '${targetUrl.replace(/'/g, "\\'")}'; true;`);
+              }
+            }
+          }}
+          onShouldStartLoadWithRequest={(request) => {
+            const url = request.url || '';
+            if (url.startsWith('mailto:') || url.startsWith('tel:') || url.startsWith('intent:')) {
+              Linking.openURL(url);
+              return false;
+            }
+            return true;
+          }}
+          onLoadStart={() => {
+            setWebViewLoading(true);
+            setTimeout(() => setWebViewLoading(false), 2000);
+          }}
+          onLoadEnd={() => setWebViewLoading(false)}
+          onError={() => setWebViewLoading(false)}
+          onHttpError={() => setWebViewLoading(false)}
+          userAgent="Mozilla/5.0 (Linux; Android 15; OnePlus) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
+        />
+      </View>
+
+      {/* Discover - swipe screen */}
+      <View style={[StyleSheet.absoluteFill, { top: insets.top, zIndex: activeTab === 'Discover' ? 2 : 0, opacity: activeTab === 'Discover' ? 1 : 0 }]} pointerEvents={activeTab === 'Discover' ? 'auto' : 'none'}>
+        <SwipeScreen onOpenAd={handleOpenAd} />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   appHeader: {
-    height: 44,
+    height: 50,
     backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e8e8e8',
-  },
-  headerLogo: {
-    height: 30,
-    width: 100,
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
