@@ -653,6 +653,14 @@ function SellerSection({ ad }) {
 
   const openStatus = getOpenStatus();
 
+  const memberSinceD = user.created_at ? new Date(user.created_at) : null;
+  const memberYearsD = memberSinceD ? Math.max(0, Math.floor((Date.now() - memberSinceD.getTime()) / (365.25 * 24 * 60 * 60 * 1000))) : null;
+  const memberLabelD = memberYearsD === null ? null : memberYearsD < 1 ? 'New' : `${memberYearsD} year${memberYearsD !== 1 ? 's' : ''}`;
+  const ratingD = user.average_rating ? parseFloat(user.average_rating) : 0;
+  const reviewCountD = user.total_reviews || 0;
+  const responseRateD = ad.avg_response_rate || 0;
+  const hasStatsD = ratingD > 0 || memberLabelD || reviewCountD > 0;
+
   if (isDealer) {
     return (
       <View style={styles.section}>
@@ -690,13 +698,48 @@ function SellerSection({ ad }) {
           </View>
         )}
 
-        {user.average_rating && parseFloat(user.average_rating) > 0 && (
-          <View style={styles.dealerStatsRow}>
-            <Ionicons name="star" size={15} color="#f5a623" />
-            <Text style={styles.dealerRatingNum}>{parseFloat(user.average_rating).toFixed(1)}</Text>
-            {user.total_reviews > 0 && (
-              <Text style={styles.dealerReviewCount}>({user.total_reviews} reviews)</Text>
+        <View style={styles.verifiedBadges}>
+          {ad.email && (
+            <View style={styles.verifiedRow}>
+              <Ionicons name="checkmark-circle" size={16} color="#27ae60" />
+              <Text style={styles.verifiedText}>Email verified</Text>
+            </View>
+          )}
+          {ad.phone_verified === 1 && (
+            <View style={styles.verifiedRow}>
+              <Ionicons name="checkmark-circle" size={16} color="#27ae60" />
+              <Text style={styles.verifiedText}>Phone verified</Text>
+            </View>
+          )}
+        </View>
+
+        {hasStatsD && (
+          <View style={styles.sellerStatsCard}>
+            {ratingD > 0 && (
+              <View style={styles.sellerStatItem}>
+                <Text style={styles.sellerStatValue}>{ratingD.toFixed(1)}/5 <Ionicons name="star" size={14} color="#f5a623" /></Text>
+                <Text style={styles.sellerStatLabel}>{ratingD >= 4.5 ? 'Excellent' : ratingD >= 3.5 ? 'Very Good' : ratingD >= 2.5 ? 'Good' : 'Fair'}</Text>
+              </View>
             )}
+            {reviewCountD > 0 && (
+              <View style={[styles.sellerStatItem, styles.sellerStatBorder]}>
+                <Text style={styles.sellerStatValue}>{reviewCountD}</Text>
+                <Text style={styles.sellerStatLabel}>Review{reviewCountD !== 1 ? 's' : ''}</Text>
+              </View>
+            )}
+            {memberLabelD && (
+              <View style={[styles.sellerStatItem, (ratingD > 0 || reviewCountD > 0) && styles.sellerStatBorder]}>
+                <Text style={styles.sellerStatValue}>{memberLabelD}</Text>
+                <Text style={styles.sellerStatLabel}>on Listit</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {responseRateD > 0 && (
+          <View style={styles.sellerMetaRow}>
+            <Ionicons name="chatbubble-outline" size={15} color="#666" />
+            <Text style={styles.sellerMetaText}>Answers {responseRateD}% of messages</Text>
           </View>
         )}
 
@@ -740,35 +783,28 @@ function SellerSection({ ad }) {
         {(ad.live_ads_count > 0 || ad.total_ads_count > 0) && (
           <View>
             <View style={styles.dealerInfoRow}>
-              <Ionicons name="car-outline" size={16} color="#666" />
+              <Ionicons name="document-text-outline" size={16} color="#666" />
               <Text style={styles.dealerInfoText}>
-                {ad.live_ads_count || 0} Active ad{ad.live_ads_count !== 1 ? 's' : ''}{ad.total_ads_count ? `  |  ${ad.total_ads_count} Total ads` : ''}
+                {ad.live_ads_count || 0} Active ad{ad.live_ads_count !== 1 ? 's' : ''}{ad.total_ads_count ? `  |  ${ad.total_ads_count}+ Total ads` : ''}
               </Text>
             </View>
-            <TouchableOpacity style={styles.dealerInfoRow}>
-              <Ionicons name="open-outline" size={16} color={BLUE} />
-              <Text style={[styles.dealerInfoText, { color: BLUE, textDecorationLine: 'underline' }]}>View all ads</Text>
+            <TouchableOpacity style={styles.viewAllAdsBtn}>
+              <Ionicons name="open-outline" size={15} color={BLUE} />
+              <Text style={styles.viewAllAdsText}>View all ads</Text>
             </TouchableOpacity>
           </View>
         )}
-
-        <View style={styles.verifiedBadges}>
-          {ad.phone_verified === 1 && (
-            <View style={styles.verifiedRow}>
-              <Ionicons name="checkmark-circle" size={16} color="#27ae60" />
-              <Text style={styles.verifiedText}>Phone verified</Text>
-            </View>
-          )}
-          {ad.email && (
-            <View style={styles.verifiedRow}>
-              <Ionicons name="checkmark-circle" size={16} color="#27ae60" />
-              <Text style={styles.verifiedText}>Email verified</Text>
-            </View>
-          )}
-        </View>
       </View>
     );
   }
+
+  const memberSince = user.created_at ? new Date(user.created_at) : null;
+  const memberYears = memberSince ? Math.max(0, Math.floor((Date.now() - memberSince.getTime()) / (365.25 * 24 * 60 * 60 * 1000))) : null;
+  const memberLabel = memberYears === null ? null : memberYears < 1 ? 'New member' : `${memberYears} year${memberYears !== 1 ? 's' : ''}`;
+  const rating = user.average_rating ? parseFloat(user.average_rating) : 0;
+  const reviewCount = user.total_reviews || 0;
+  const responseRate = ad.avg_response_rate || 0;
+  const hasStats = rating > 0 || memberLabel || reviewCount > 0;
 
   return (
     <View style={styles.section}>
@@ -785,37 +821,69 @@ function SellerSection({ ad }) {
           <Text style={styles.sellerType}>
             Private Seller{ad.location ? ` · ${ad.location}` : ''}
           </Text>
-          {user.average_rating && parseFloat(user.average_rating) > 0 && (
-            <View style={styles.ratingRow}>
-              <Ionicons name="star" size={14} color="#f5a623" />
-              <Text style={styles.ratingText}> {parseFloat(user.average_rating).toFixed(1)}</Text>
-              {user.total_reviews > 0 && (
-                <Text style={styles.reviewCount}> ({user.total_reviews} reviews)</Text>
-              )}
-            </View>
-          )}
         </View>
       </View>
 
       <View style={styles.verifiedBadges}>
-        {ad.phone_verified === 1 && (
-          <View style={styles.verifiedRow}>
-            <Ionicons name="checkmark-circle" size={16} color="#27ae60" />
-            <Text style={styles.verifiedText}>Phone verified</Text>
-          </View>
-        )}
         {ad.email && (
           <View style={styles.verifiedRow}>
             <Ionicons name="checkmark-circle" size={16} color="#27ae60" />
             <Text style={styles.verifiedText}>Email verified</Text>
           </View>
         )}
+        {ad.phone_verified === 1 && (
+          <View style={styles.verifiedRow}>
+            <Ionicons name="checkmark-circle" size={16} color="#27ae60" />
+            <Text style={styles.verifiedText}>Phone verified</Text>
+          </View>
+        )}
       </View>
 
-      {ad.live_ads_count > 1 && (
-        <Text style={styles.liveAdsText}>
-          {ad.live_ads_count} Active ads | {ad.total_ads_count || ad.live_ads_count} Total ads
-        </Text>
+      {hasStats && (
+        <View style={styles.sellerStatsCard}>
+          {rating > 0 && (
+            <View style={styles.sellerStatItem}>
+              <Text style={styles.sellerStatValue}>{rating.toFixed(1)}/5 <Ionicons name="star" size={14} color="#f5a623" /></Text>
+              <Text style={styles.sellerStatLabel}>{rating >= 4.5 ? 'Excellent' : rating >= 3.5 ? 'Very Good' : rating >= 2.5 ? 'Good' : 'Fair'}</Text>
+            </View>
+          )}
+          {reviewCount > 0 && (
+            <View style={[styles.sellerStatItem, styles.sellerStatBorder]}>
+              <Text style={styles.sellerStatValue}>{reviewCount}</Text>
+              <Text style={styles.sellerStatLabel}>Review{reviewCount !== 1 ? 's' : ''}</Text>
+            </View>
+          )}
+          {memberLabel && (
+            <View style={[styles.sellerStatItem, (rating > 0 || reviewCount > 0) && styles.sellerStatBorder]}>
+              <Text style={styles.sellerStatValue}>{memberLabel}</Text>
+              <Text style={styles.sellerStatLabel}>on Listit</Text>
+            </View>
+          )}
+        </View>
+      )}
+
+      {responseRate > 0 && (
+        <View style={styles.sellerMetaRow}>
+          <Ionicons name="chatbubble-outline" size={15} color="#666" />
+          <Text style={styles.sellerMetaText}>Answers {responseRate}% of messages</Text>
+        </View>
+      )}
+
+      {(ad.live_ads_count > 0 || ad.total_ads_count > 0) && (
+        <View style={styles.sellerMetaRow}>
+          <Ionicons name="document-text-outline" size={15} color="#666" />
+          <Text style={styles.sellerMetaText}>
+            {ad.live_ads_count || 0} Active ad{ad.live_ads_count !== 1 ? 's' : ''}
+            {ad.total_ads_count ? `  |  ${ad.total_ads_count}+ Total ads` : ''}
+          </Text>
+        </View>
+      )}
+
+      {ad.live_ads_count > 0 && (
+        <TouchableOpacity style={styles.viewAllAdsBtn}>
+          <Ionicons name="open-outline" size={15} color={BLUE} />
+          <Text style={styles.viewAllAdsText}>View all ads</Text>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -1668,6 +1736,56 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#888',
     marginTop: 12,
+  },
+  sellerStatsCard: {
+    flexDirection: 'row',
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  sellerStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sellerStatBorder: {
+    borderLeftWidth: 1,
+    borderLeftColor: '#e8e8e8',
+  },
+  sellerStatValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: BLUE,
+  },
+  sellerStatLabel: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
+  },
+  sellerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  sellerMetaText: {
+    fontSize: 14,
+    color: '#555',
+  },
+  viewAllAdsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+  },
+  viewAllAdsText: {
+    fontSize: 14,
+    color: BLUE,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 
   // Contact bar
