@@ -1151,7 +1151,7 @@ export default function NativeAdDetailScreen({ adId, onBack, onRelatedAdPress })
             <Text style={styles.callBtnText}>Call</Text>
           </TouchableOpacity>
         )}
-        <TouchableOpacity style={[styles.messageBtn, !hasPhone && { marginRight: 0 }]}
+        <TouchableOpacity style={styles.messageBtn}
           onPress={() => setMsgVisible(true)}>
           <Ionicons name="chatbubble-outline" size={18} color="#fff" />
           <Text style={styles.messageBtnText}>Message</Text>
@@ -1683,6 +1683,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+    gap: 10,
   },
   messageBtn: {
     flex: 1,
@@ -1692,7 +1693,6 @@ const styles = StyleSheet.create({
     backgroundColor: BLUE,
     paddingVertical: 14,
     borderRadius: 10,
-    marginRight: 8,
   },
   messageBtnText: {
     color: '#fff',

@@ -49,6 +49,13 @@ function formatMileage(val) {
   return n.toLocaleString('en-IE') + ' km';
 }
 
+const SECTION_TABS = [
+  { key: 'motors', label: 'Motors', icon: 'car-sport', slugs: ['cars-and-motors'] },
+  { key: 'marketplace', label: 'Marketplace', icon: 'storefront', slugs: ['house-diy', 'electronics', 'clothes-lifestyle', 'sports-hobbies', 'services', 'jobs', 'baby-kids', 'animals', 'business', 'holidays-tickets', 'lost-found', 'music-education', 'wanted', 'pets', 'whats-on'] },
+  { key: 'property', label: 'Property', icon: 'home', slugs: ['property'] },
+  { key: 'farming', label: 'Farming', icon: 'leaf', slugs: ['farming'] },
+];
+
 const CATEGORY_ICONS = {
   'cars-and-motors': { icon: 'car-sport', color: '#1b87f4' },
   'house-diy': { icon: 'home', color: '#27ae60' },
@@ -152,6 +159,7 @@ export default function NativeHomeScreen({ onCategoryPress, onAdPress, onSearchP
   const [refreshing, setRefreshing] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [featuredDealer, setFeaturedDealer] = useState(null);
+  const [activeSection, setActiveSection] = useState('marketplace');
 
   const fetchData = useCallback(async (isRefresh = false) => {
     try {
@@ -232,10 +240,15 @@ export default function NativeHomeScreen({ onCategoryPress, onAdPress, onSearchP
 
   const handleSearchSubmit = useCallback(() => {
     if (searchText.trim()) {
-      onSearchPress(`/all?keyword=${encodeURIComponent(searchText.trim())}`);
+      const section = SECTION_TABS.find(s => s.key === activeSection);
+      if (section && section.slugs.length === 1) {
+        onCategoryPress(`/${section.slugs[0]}`);
+      } else {
+        onSearchPress(`/all?keyword=${encodeURIComponent(searchText.trim())}`);
+      }
       setSearchText('');
     }
-  }, [searchText, onSearchPress]);
+  }, [searchText, onSearchPress, onCategoryPress, activeSection]);
 
   if (loading) {
     return (
@@ -244,6 +257,10 @@ export default function NativeHomeScreen({ onCategoryPress, onAdPress, onSearchP
       </View>
     );
   }
+
+  const activeSlugs = SECTION_TABS.find(s => s.key === activeSection)?.slugs || [];
+  const filteredCategories = categories.filter(c => activeSlugs.includes(c.slug));
+  const sectionLabel = SECTION_TABS.find(s => s.key === activeSection)?.label || 'Marketplace';
 
   const renderHeader = () => (
     <View>
@@ -263,13 +280,34 @@ export default function NativeHomeScreen({ onCategoryPress, onAdPress, onSearchP
           <Text style={styles.heroTitle}>Ireland's favourite{'\n'}place to buy and sell</Text>
         </LinearGradient>
 
+        {/* Section Tabs */}
+        <View style={styles.sectionTabsWrap}>
+          <View style={styles.sectionTabsRow}>
+            {SECTION_TABS.map((tab) => {
+              const isActive = activeSection === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[styles.sectionTab, isActive && styles.sectionTabActive]}
+                  onPress={() => setActiveSection(tab.key)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.sectionTabText, isActive && styles.sectionTabTextActive]}>
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {/* Search Card overlapping hero */}
         <View style={styles.searchCard}>
           <View style={styles.searchBar}>
             <Ionicons name="search" size={20} color="#999" style={{ marginRight: 10 }} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search Listit..."
+              placeholder={`Search ${sectionLabel}...`}
               placeholderTextColor="#999"
               value={searchText}
               onChangeText={setSearchText}
@@ -287,17 +325,23 @@ export default function NativeHomeScreen({ onCategoryPress, onAdPress, onSearchP
 
       {/* Category List */}
       <View style={styles.categoriesSection}>
-        {categories.map((cat, idx) => (
+        {filteredCategories.map((cat, idx) => (
           <React.Fragment key={cat.id}>
             <CategoryRow cat={cat} onPress={handleCategoryPress} />
-            {idx < categories.length - 1 && <View style={styles.categoryDivider} />}
+            {idx < filteredCategories.length - 1 && <View style={styles.categoryDivider} />}
           </React.Fragment>
         ))}
       </View>
 
       {/* See All Link */}
-      <TouchableOpacity style={styles.seeAllMarketplace} onPress={() => onSearchPress('/all')} activeOpacity={0.7}>
-        <Text style={styles.seeAllMarketplaceText}>See all in Marketplace</Text>
+      <TouchableOpacity style={styles.seeAllMarketplace} onPress={() => {
+        if (activeSlugs.length === 1) {
+          onCategoryPress(`/${activeSlugs[0]}`);
+        } else {
+          onSearchPress('/all');
+        }
+      }} activeOpacity={0.7}>
+        <Text style={styles.seeAllMarketplaceText}>See all in {sectionLabel}</Text>
         <Ionicons name="chevron-forward" size={18} color="#555" />
       </TouchableOpacity>
 
@@ -462,6 +506,38 @@ const styles = StyleSheet.create({
     color: '#333',
   },
 
+  // Section Tabs
+  sectionTabsWrap: {
+    position: 'absolute',
+    bottom: 30,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+  },
+  sectionTabsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    gap: 6,
+  },
+  sectionTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  sectionTabActive: {
+    backgroundColor: '#fff',
+  },
+  sectionTabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.85)',
+  },
+  sectionTabTextActive: {
+    color: '#1b87f4',
+  },
+
   // Hero Banner
   heroBanner: {
     position: 'relative',
@@ -469,7 +545,7 @@ const styles = StyleSheet.create({
   },
   heroGradient: {
     paddingTop: 30,
-    paddingBottom: 50,
+    paddingBottom: 70,
     paddingHorizontal: 24,
     alignItems: 'center',
   },

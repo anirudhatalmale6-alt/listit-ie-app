@@ -187,10 +187,15 @@ function DetailScreen({ route, navigation }) {
     navigation.goBack();
   }, [navigation]);
 
+  const handleRelatedAdPress = useCallback((ad) => {
+    if (ad && ad.id) navigation.push('Detail', { adId: ad.id });
+  }, [navigation]);
+
   return (
     <NativeAdDetailScreen
       adId={route.params?.adId}
       onBack={handleBack}
+      onRelatedAdPress={handleRelatedAdPress}
     />
   );
 }
