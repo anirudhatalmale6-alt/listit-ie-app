@@ -1,15 +1,19 @@
-import React, { useRef, useState, useCallback } from 'react';
-import { StatusBar, Platform, View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, ScrollView, Image, Linking, Dimensions } from 'react-native';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
+import { StatusBar, Platform, View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, ScrollView, Image, Linking, Dimensions, Alert } from 'react-native';
 import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { WebView } from 'react-native-webview';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import SwipeScreen from './screens/SwipeScreen';
 import SavedScreen from './screens/SavedScreen';
 import NativeHomeScreen from './screens/NativeHomeScreen';
 import NativeSearchScreen from './screens/NativeSearchScreen';
 import NativeAdDetailScreen from './screens/NativeAdDetailScreen';
+import NativeLoginScreen from './screens/NativeLoginScreen';
+import NativeRegisterScreen from './screens/NativeRegisterScreen';
+import NativeForgotPasswordScreen from './screens/NativeForgotPasswordScreen';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -46,6 +50,7 @@ class ErrorBoundary extends React.Component {
 }
 
 const BASE_URL = 'https://listit.ie';
+const API_URL = 'https://api.listit.ie';
 const LISTIT_BLUE = '#1b87f4';
 const NAV_BG = '#2c2c2e';
 
@@ -264,18 +269,53 @@ function CustomTabBar({ activeTab, onTabPress, savedCount }) {
   );
 }
 
-function AppHeader({ onLoginPress }) {
+function AppHeader({ user, onLoginPress, onLogout }) {
   return (
     <View style={styles.appHeader}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Image source={require('./assets/splash-icon.png')} style={{ width: 30, height: 30 }} resizeMode="contain" />
         <Text style={{ fontSize: 20, fontWeight: '800', color: LISTIT_BLUE, marginLeft: 6 }}>Listit</Text>
       </View>
-      <TouchableOpacity onPress={onLoginPress} activeOpacity={0.7}>
-        <Text style={{ fontSize: 16, fontWeight: '600', color: '#333' }}>Log In</Text>
-      </TouchableOpacity>
+      {user ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={styles.avatarSmall}>
+            <Text style={styles.avatarText}>{(user.name || 'U').charAt(0).toUpperCase()}</Text>
+          </View>
+          <TouchableOpacity onPress={onLogout} activeOpacity={0.7}>
+            <Ionicons name="log-out-outline" size={22} color="#666" />
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <TouchableOpacity onPress={onLoginPress} activeOpacity={0.7}>
+          <Text style={{ fontSize: 16, fontWeight: '600', color: '#333' }}>Log In</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
+}
+
+function injectAuthIntoWebView(webViewRef, token, user) {
+  if (!webViewRef.current || !token) return;
+  const userJson = JSON.stringify(user || {}).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const tokenSafe = (token || '').replace(/'/g, "\\'");
+  webViewRef.current.injectJavaScript(`
+    try {
+      localStorage.setItem('token', '${tokenSafe}');
+      localStorage.setItem('user', '${userJson}');
+    } catch(e) {}
+    true;
+  `);
+}
+
+function clearAuthFromWebView(webViewRef) {
+  if (!webViewRef.current) return;
+  webViewRef.current.injectJavaScript(`
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    } catch(e) {}
+    true;
+  `);
 }
 
 export default function App() {
@@ -285,6 +325,80 @@ export default function App() {
   const [browseRoute, setBrowseRoute] = useState('Home');
   const [savedCount, setSavedCount] = useState(0);
   const [webViewLoading, setWebViewLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
+  const [authScreen, setAuthScreen] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const webViewReady = useRef(false);
+  const pendingAuthInject = useRef(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [storedToken, storedUser] = await Promise.all([
+          AsyncStorage.getItem('auth_token'),
+          AsyncStorage.getItem('auth_user'),
+        ]);
+        if (storedToken && storedUser) {
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser));
+          pendingAuthInject.current = true;
+        }
+      } catch (e) {
+        console.warn('Failed to restore auth:', e);
+      }
+      setAuthReady(true);
+    })();
+  }, []);
+
+  const handleAuthSuccess = useCallback(async (userInfo, authToken) => {
+    setUser(userInfo);
+    setToken(authToken);
+    setAuthScreen(null);
+    try {
+      await AsyncStorage.setItem('auth_token', authToken);
+      await AsyncStorage.setItem('auth_user', JSON.stringify(userInfo));
+    } catch (e) {
+      console.warn('Failed to save auth:', e);
+    }
+    injectAuthIntoWebView(webViewRef, authToken, userInfo);
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log Out',
+        style: 'destructive',
+        onPress: async () => {
+          if (user?.id) {
+            try {
+              await fetch(`${API_URL}/api/auth/logout`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: user.id }),
+              });
+            } catch (e) {}
+          }
+          setUser(null);
+          setToken(null);
+          clearAuthFromWebView(webViewRef);
+          await AsyncStorage.multiRemove(['auth_token', 'auth_user']);
+          if (webViewRef.current) {
+            webViewRef.current.injectJavaScript(`window.location.href = '${BASE_URL}'; true;`);
+          }
+        },
+      },
+    ]);
+  }, [user]);
+
+  const handleGoogleLogin = useCallback(async () => {
+    Alert.alert(
+      'Google Sign-In',
+      'Google Sign-In will be available in the next update. Please use email login for now.',
+      [{ text: 'OK' }]
+    );
+  }, []);
 
   const handleOpenAd = useCallback((adId) => {
     setActiveTab('Browse');
@@ -299,8 +413,15 @@ export default function App() {
       setBrowseRoute('Home');
       return;
     }
+
+    if (WEBVIEW_TABS.has(tab) && !user) {
+      setAuthScreen('login');
+      return;
+    }
+
     setActiveTab(tab);
     if (WEBVIEW_TABS.has(tab) && webViewRef.current) {
+      injectAuthIntoWebView(webViewRef, token, user);
       const urls = {
         'Place Ad': `${BASE_URL}/user/ads/create`,
         'Messages': `${BASE_URL}/user/messages`,
@@ -310,17 +431,46 @@ export default function App() {
         webViewRef.current.injectJavaScript(`window.location.href = '${urls[tab]}'; true;`);
       }
     }
-  }, [activeTab, navigationRef]);
+  }, [activeTab, navigationRef, user, token]);
 
   const handleLoginPress = useCallback(() => {
-    setActiveTab('My Profile');
-    if (webViewRef.current) {
-      webViewRef.current.injectJavaScript(`window.location.href = '${BASE_URL}/login'; true;`);
+    if (user) {
+      setActiveTab('My Profile');
+      if (webViewRef.current) {
+        injectAuthIntoWebView(webViewRef, token, user);
+        webViewRef.current.injectJavaScript(`window.location.href = '${BASE_URL}/user/profile'; true;`);
+      }
+    } else {
+      setAuthScreen('login');
     }
-  }, []);
+  }, [user, token]);
 
   const isWebViewTab = WEBVIEW_TABS.has(activeTab);
   const showBrowse = activeTab === 'Browse';
+
+  if (!authReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+        <ActivityIndicator size="large" color={LISTIT_BLUE} />
+      </View>
+    );
+  }
+
+  if (authScreen) {
+    return (
+      <ErrorBoundary>
+        <SafeAreaProvider>
+          <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+          <AuthScreens
+            authScreen={authScreen}
+            setAuthScreen={setAuthScreen}
+            onAuthSuccess={handleAuthSuccess}
+            onGoogleLogin={handleGoogleLogin}
+          />
+        </SafeAreaProvider>
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>
@@ -336,9 +486,13 @@ export default function App() {
               webViewLoading={webViewLoading}
               setWebViewLoading={setWebViewLoading}
               handleLoginPress={handleLoginPress}
+              handleLogout={handleLogout}
               handleOpenAd={handleOpenAd}
               setSavedCount={setSavedCount}
               onBrowseScreenChange={setBrowseRoute}
+              user={user}
+              token={token}
+              pendingAuthInject={pendingAuthInject}
             />
             {!(showBrowse && browseRoute !== 'Home') && (
               <CustomTabBar
@@ -354,13 +508,58 @@ export default function App() {
   );
 }
 
+function AuthScreens({ authScreen, setAuthScreen, onAuthSuccess, onGoogleLogin }) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#fff', paddingTop: insets.top }}>
+      {authScreen === 'login' && (
+        <NativeLoginScreen
+          onLogin={onAuthSuccess}
+          onGoToRegister={() => setAuthScreen('register')}
+          onForgotPassword={() => setAuthScreen('forgot')}
+          onGoogleLogin={onGoogleLogin}
+        />
+      )}
+      {authScreen === 'register' && (
+        <NativeRegisterScreen
+          onRegister={onAuthSuccess}
+          onGoToLogin={() => setAuthScreen('login')}
+          onGoogleLogin={onGoogleLogin}
+        />
+      )}
+      {authScreen === 'forgot' && (
+        <NativeForgotPasswordScreen
+          onBack={() => setAuthScreen('login')}
+          onResetSuccess={() => setAuthScreen('login')}
+        />
+      )}
+      <TouchableOpacity
+        style={styles.authCloseBtn}
+        onPress={() => setAuthScreen(null)}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="close" size={24} color="#666" />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 function SafeAreaContent({
   activeTab, showBrowse, isWebViewTab,
   webViewRef, webViewLoading, setWebViewLoading,
-  handleLoginPress, handleOpenAd, setSavedCount,
-  onBrowseScreenChange,
+  handleLoginPress, handleLogout, handleOpenAd, setSavedCount,
+  onBrowseScreenChange, user, token, pendingAuthInject,
 }) {
   const insets = useSafeAreaInsets();
+
+  const handleWebViewLoadEnd = useCallback(() => {
+    setWebViewLoading(false);
+    if (pendingAuthInject.current && token) {
+      injectAuthIntoWebView(webViewRef, token, user);
+      pendingAuthInject.current = false;
+    }
+  }, [token, user, webViewRef, pendingAuthInject, setWebViewLoading]);
 
   return (
     <View style={{ flex: 1, paddingTop: insets.top }}>
@@ -371,7 +570,7 @@ function SafeAreaContent({
 
       {/* WebView for Place Ad, Messages, Profile */}
       <View style={{ flex: isWebViewTab ? 1 : 0, height: isWebViewTab ? undefined : 0, overflow: 'hidden' }}>
-        <AppHeader onLoginPress={handleLoginPress} />
+        <AppHeader user={user} onLoginPress={handleLoginPress} onLogout={handleLogout} />
         {webViewLoading && isWebViewTab && (
           <View style={styles.loadingOverlay}>
             <ActivityIndicator size="large" color={LISTIT_BLUE} />
@@ -421,7 +620,7 @@ function SafeAreaContent({
             setWebViewLoading(true);
             setTimeout(() => setWebViewLoading(false), 2000);
           }}
-          onLoadEnd={() => setWebViewLoading(false)}
+          onLoadEnd={handleWebViewLoadEnd}
           onError={() => setWebViewLoading(false)}
           onHttpError={() => setWebViewLoading(false)}
           userAgent="Mozilla/5.0 (Linux; Android 15; OnePlus) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36"
@@ -470,5 +669,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '700',
+  },
+  avatarSmall: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: LISTIT_BLUE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  authCloseBtn: {
+    position: 'absolute',
+    top: 52,
+    right: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
 });
