@@ -70,8 +70,25 @@ const AdCard = memo(({ ad, onPress }) => {
   }
   const specLine = specParts.join(' · ');
 
+  const isDealer = ad.vendor_type === 'dealer' && ad.dealer_name;
+
   return (
-    <TouchableOpacity style={styles.card} onPress={() => onPress(ad)} activeOpacity={0.7}>
+    <TouchableOpacity style={[styles.card, isDealer && styles.dealerCard]} onPress={() => onPress(ad)} activeOpacity={0.7}>
+      {isDealer && (
+        <View style={styles.dealerHeader}>
+          {ad.logo ? (
+            <Image source={CDN + ad.logo} style={styles.dealerLogo} contentFit="contain" />
+          ) : (
+            <View style={styles.dealerLogoPlaceholder}>
+              <Ionicons name="business" size={14} color="#fff" />
+            </View>
+          )}
+          <Text style={styles.dealerName} numberOfLines={1}>{ad.dealer_name}</Text>
+          <View style={styles.dealerBadge}>
+            <Ionicons name="shield-checkmark" size={12} color="#fff" />
+          </View>
+        </View>
+      )}
       {ad.under_offer === 1 && (
         <View style={styles.underOfferBanner}>
           <Text style={styles.underOfferText}>Under Offer</Text>
@@ -115,6 +132,25 @@ const AdCard = memo(({ ad, onPress }) => {
     </TouchableOpacity>
   );
 });
+
+const SECTION_TABS = [
+  { key: 'all', label: 'All', icon: 'grid-outline' },
+  { key: 'motors', label: 'Motors', icon: 'car-sport-outline', slugs: ['cars-and-motors'] },
+  { key: 'marketplace', label: 'Marketplace', icon: 'storefront-outline', slugs: ['house-diy','electronics','clothes-lifestyle','sports-hobbies','services','jobs','baby-kids','animals','business','holidays-tickets','lost-found','music-education','wanted','pets','whats-on'] },
+  { key: 'property', label: 'Property', icon: 'home-outline', slugs: ['property'] },
+  { key: 'farming', label: 'Farming', icon: 'leaf-outline', slugs: ['farming'] },
+];
+
+const FUEL_TYPES = ['Diesel', 'Electric', 'Hybrid', 'Petrol'];
+const BODY_TYPES = ['Saloon', 'Hatchback', 'Estate', 'SUV', 'Coupe', 'Convertible', 'MPV', 'Van', 'Pickup', 'Other'];
+const YEAR_OPTIONS = (() => {
+  const now = new Date().getFullYear();
+  const extra = new Date().getMonth() >= 7 ? 1 : 0;
+  const years = [];
+  for (let y = now + extra; y >= now - 50; y--) years.push(String(y));
+  return years;
+})();
+const MILEAGE_OPTIONS = ['0','1000','5000','10000','20000','30000','40000','50000','60000','70000','80000','90000','100000','150000','200000','250000','300000'];
 
 const SORT_OPTIONS = [
   { label: 'Best Match', value: 'id', order: 'DESC' },
@@ -384,6 +420,13 @@ export default function NativeSearchScreen({ categorySlug, categoryName, keyword
   const [filterDistance, setFilterDistance] = useState(25);
   const [filterSellerType, setFilterSellerType] = useState('');
   const [filterAdType, setFilterAdType] = useState('');
+  const [filterFuelTypes, setFilterFuelTypes] = useState([]);
+  const [filterBodyTypes, setFilterBodyTypes] = useState([]);
+  const [filterYearFrom, setFilterYearFrom] = useState('');
+  const [filterYearTo, setFilterYearTo] = useState('');
+  const [filterMileageFrom, setFilterMileageFrom] = useState('');
+  const [filterMileageTo, setFilterMileageTo] = useState('');
+  const [activeSection, setActiveSection] = useState('all');
 
   const [appliedMinPrice, setAppliedMinPrice] = useState('');
   const [appliedMaxPrice, setAppliedMaxPrice] = useState('');
@@ -391,6 +434,12 @@ export default function NativeSearchScreen({ categorySlug, categoryName, keyword
   const [appliedDistance, setAppliedDistance] = useState(25);
   const [appliedSellerType, setAppliedSellerType] = useState('');
   const [appliedAdType, setAppliedAdType] = useState('');
+  const [appliedFuelTypes, setAppliedFuelTypes] = useState([]);
+  const [appliedBodyTypes, setAppliedBodyTypes] = useState([]);
+  const [appliedYearFrom, setAppliedYearFrom] = useState('');
+  const [appliedYearTo, setAppliedYearTo] = useState('');
+  const [appliedMileageFrom, setAppliedMileageFrom] = useState('');
+  const [appliedMileageTo, setAppliedMileageTo] = useState('');
   const [activeFilterCount, setActiveFilterCount] = useState(0);
 
   useEffect(() => {
@@ -418,14 +467,45 @@ export default function NativeSearchScreen({ categorySlug, categoryName, keyword
         limit: 20,
         sort_by: sortBy,
         sort_order: sortOrder,
+        status: 1,
       };
       if (categoryId) body.categories = categoryId;
       if (activeKeyword) body.keyword = activeKeyword;
-      if (appliedMinPrice) body.min_price = appliedMinPrice;
-      if (appliedMaxPrice) body.max_price = appliedMaxPrice;
+      if (appliedMinPrice) body.price_from = appliedMinPrice;
+      if (appliedMaxPrice) body.price_to = appliedMaxPrice;
       if (appliedCounty && appliedCounty !== 'All Ireland') body.location = appliedCounty;
-      if (appliedSellerType) body.seller_type = appliedSellerType;
-      if (appliedAdType) body.ad_type = appliedAdType;
+      if (appliedSellerType) {
+        if (appliedSellerType === 'private') body.im_trader = 0;
+        else if (appliedSellerType === 'trader') body.im_trader = 1;
+        else if (appliedSellerType === 'dealer') body.im_trader = 2;
+      }
+      if (appliedAdType) {
+        if (appliedAdType === 'for_sale') body.ad_type = 1;
+        else if (appliedAdType === 'wanted') body.ad_type = 2;
+      }
+
+      const dynamic = { makeModel: [], ranges: [], filter: [] };
+      let hasVehicleFilter = false;
+      if (appliedFuelTypes.length > 0) {
+        dynamic.filter.push({ key: 'fuel_type', values: appliedFuelTypes });
+        hasVehicleFilter = true;
+      }
+      if (appliedBodyTypes.length > 0) {
+        dynamic.filter.push({ key: 'body_type', values: appliedBodyTypes });
+        hasVehicleFilter = true;
+      }
+      if (appliedYearFrom || appliedYearTo) {
+        dynamic.ranges.push({ key: 'year', from: appliedYearFrom || '', to: appliedYearTo || '' });
+        hasVehicleFilter = true;
+      }
+      if (appliedMileageFrom || appliedMileageTo) {
+        dynamic.ranges.push({ key: 'milage', from: appliedMileageFrom || '', to: appliedMileageTo || '' });
+        hasVehicleFilter = true;
+      }
+      if (hasVehicleFilter) {
+        body.is_vehicle = 1;
+        body.dynamic = dynamic;
+      }
 
       const resp = await fetch(`${API}/api/user/search`, {
         method: 'POST',
@@ -451,13 +531,13 @@ export default function NativeSearchScreen({ categorySlug, categoryName, keyword
       setLoadingMore(false);
       setRefreshing(false);
     }
-  }, [categoryId, activeKeyword, sortBy, sortOrder, appliedMinPrice, appliedMaxPrice, appliedCounty, appliedSellerType, appliedAdType]);
+  }, [categoryId, activeKeyword, sortBy, sortOrder, appliedMinPrice, appliedMaxPrice, appliedCounty, appliedSellerType, appliedAdType, appliedFuelTypes, appliedBodyTypes, appliedYearFrom, appliedYearTo, appliedMileageFrom, appliedMileageTo]);
 
   useEffect(() => {
     if (categoryId !== null || !categorySlug) {
       fetchAds(1);
     }
-  }, [categoryId, activeKeyword, sortBy, sortOrder, appliedMinPrice, appliedMaxPrice, appliedCounty, appliedSellerType, appliedAdType]);
+  }, [categoryId, activeKeyword, sortBy, sortOrder, appliedMinPrice, appliedMaxPrice, appliedCounty, appliedSellerType, appliedAdType, appliedFuelTypes, appliedBodyTypes, appliedYearFrom, appliedYearTo, appliedMileageFrom, appliedMileageTo]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -483,15 +563,25 @@ export default function NativeSearchScreen({ categorySlug, categoryName, keyword
     setAppliedDistance(filterDistance);
     setAppliedSellerType(filterSellerType);
     setAppliedAdType(filterAdType);
+    setAppliedFuelTypes([...filterFuelTypes]);
+    setAppliedBodyTypes([...filterBodyTypes]);
+    setAppliedYearFrom(filterYearFrom);
+    setAppliedYearTo(filterYearTo);
+    setAppliedMileageFrom(filterMileageFrom);
+    setAppliedMileageTo(filterMileageTo);
     let count = 0;
     if (filterMinPrice) count++;
     if (filterMaxPrice) count++;
     if (filterCounty !== 'All Ireland') count++;
     if (filterSellerType) count++;
     if (filterAdType) count++;
+    if (filterFuelTypes.length > 0) count++;
+    if (filterBodyTypes.length > 0) count++;
+    if (filterYearFrom || filterYearTo) count++;
+    if (filterMileageFrom || filterMileageTo) count++;
     setActiveFilterCount(count);
     setShowFilter(false);
-  }, [filterMinPrice, filterMaxPrice, filterCounty, filterDistance, filterSellerType, filterAdType]);
+  }, [filterMinPrice, filterMaxPrice, filterCounty, filterDistance, filterSellerType, filterAdType, filterFuelTypes, filterBodyTypes, filterYearFrom, filterYearTo, filterMileageFrom, filterMileageTo]);
 
   const handleResetFilters = useCallback(() => {
     setFilterMinPrice('');
@@ -500,12 +590,24 @@ export default function NativeSearchScreen({ categorySlug, categoryName, keyword
     setFilterDistance(25);
     setFilterSellerType('');
     setFilterAdType('');
+    setFilterFuelTypes([]);
+    setFilterBodyTypes([]);
+    setFilterYearFrom('');
+    setFilterYearTo('');
+    setFilterMileageFrom('');
+    setFilterMileageTo('');
     setAppliedMinPrice('');
     setAppliedMaxPrice('');
     setAppliedCounty('All Ireland');
     setAppliedDistance(25);
     setAppliedSellerType('');
     setAppliedAdType('');
+    setAppliedFuelTypes([]);
+    setAppliedBodyTypes([]);
+    setAppliedYearFrom('');
+    setAppliedYearTo('');
+    setAppliedMileageFrom('');
+    setAppliedMileageTo('');
     setActiveFilterCount(0);
     setShowFilter(false);
   }, []);
@@ -517,8 +619,14 @@ export default function NativeSearchScreen({ categorySlug, categoryName, keyword
     setFilterDistance(appliedDistance);
     setFilterSellerType(appliedSellerType);
     setFilterAdType(appliedAdType);
+    setFilterFuelTypes([...appliedFuelTypes]);
+    setFilterBodyTypes([...appliedBodyTypes]);
+    setFilterYearFrom(appliedYearFrom);
+    setFilterYearTo(appliedYearTo);
+    setFilterMileageFrom(appliedMileageFrom);
+    setFilterMileageTo(appliedMileageTo);
     setShowFilter(true);
-  }, [appliedMinPrice, appliedMaxPrice, appliedCounty, appliedDistance, appliedSellerType, appliedAdType]);
+  }, [appliedMinPrice, appliedMaxPrice, appliedCounty, appliedDistance, appliedSellerType, appliedAdType, appliedFuelTypes, appliedBodyTypes, appliedYearFrom, appliedYearTo, appliedMileageFrom, appliedMileageTo]);
 
   const sortLabel = useMemo(() => {
     const opt = SORT_OPTIONS.find(o => o.value === sortBy && o.order === sortOrder);
@@ -604,6 +712,28 @@ export default function NativeSearchScreen({ categorySlug, categoryName, keyword
           />
         </View>
       </View>
+
+      {/* Category Section Tabs */}
+      {!categorySlug && (
+        <View style={styles.sectionTabsWrap}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionTabsScroll}>
+            {SECTION_TABS.map(tab => {
+              const isActive = activeSection === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[styles.sectionTab, isActive && styles.sectionTabActive]}
+                  onPress={() => setActiveSection(tab.key)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name={tab.icon} size={16} color={isActive ? '#fff' : '#555'} />
+                  <Text style={[styles.sectionTabText, isActive && styles.sectionTabTextActive]}>{tab.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Results List */}
       {loading ? (
@@ -720,6 +850,123 @@ export default function NativeSearchScreen({ categorySlug, categoryName, keyword
               </View>
             </CollapsibleSection>
 
+            {/* Fuel Type */}
+            <CollapsibleSection title="Fuel Type" defaultOpen={false}>
+              <View style={styles.optionList}>
+                {FUEL_TYPES.map((fuel) => {
+                  const selected = filterFuelTypes.includes(fuel);
+                  return (
+                    <TouchableOpacity
+                      key={fuel}
+                      style={[styles.optionRow, selected && styles.optionRowActive]}
+                      onPress={() => {
+                        setFilterFuelTypes(prev =>
+                          selected ? prev.filter(f => f !== fuel) : [...prev, fuel]
+                        );
+                      }}
+                    >
+                      <Text style={[styles.optionText, selected && styles.optionTextActive]}>{fuel}</Text>
+                      {selected && <Ionicons name="checkmark-circle" size={20} color={BLUE} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </CollapsibleSection>
+
+            {/* Body Type */}
+            <CollapsibleSection title="Body Type" defaultOpen={false}>
+              <View style={styles.bodyTypeGrid}>
+                {BODY_TYPES.map((bt) => {
+                  const selected = filterBodyTypes.includes(bt);
+                  return (
+                    <TouchableOpacity
+                      key={bt}
+                      style={[styles.bodyTypeChip, selected && styles.bodyTypeChipActive]}
+                      onPress={() => {
+                        setFilterBodyTypes(prev =>
+                          selected ? prev.filter(b => b !== bt) : [...prev, bt]
+                        );
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.bodyTypeChipText, selected && styles.bodyTypeChipTextActive]}>{bt}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </CollapsibleSection>
+
+            {/* Year */}
+            <CollapsibleSection title="Year" defaultOpen={false}>
+              <View style={styles.priceRow}>
+                <View style={styles.priceInputWrap}>
+                  <Text style={styles.priceLabel}>From</Text>
+                  <TouchableOpacity
+                    style={styles.dropdownSelector}
+                    onPress={() => {
+                      const opts = YEAR_OPTIONS.slice().reverse();
+                      Alert.alert('Year From', 'Select minimum year', [
+                        { text: 'Any', onPress: () => setFilterYearFrom('') },
+                        ...opts.filter((_, i) => i % 5 === 0 || opts.indexOf(filterYearFrom) === i).slice(-15).map(y => ({
+                          text: y, onPress: () => setFilterYearFrom(y)
+                        })),
+                      ]);
+                    }}
+                  >
+                    <Text style={styles.dropdownText}>{filterYearFrom || 'Any'}</Text>
+                    <Ionicons name="chevron-down" size={18} color="#555" />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.priceDash}>{'—'}</Text>
+                <View style={styles.priceInputWrap}>
+                  <Text style={styles.priceLabel}>To</Text>
+                  <TouchableOpacity
+                    style={styles.dropdownSelector}
+                    onPress={() => {
+                      Alert.alert('Year To', 'Select maximum year', [
+                        { text: 'Any', onPress: () => setFilterYearTo('') },
+                        ...YEAR_OPTIONS.slice(0, 15).map(y => ({
+                          text: y, onPress: () => setFilterYearTo(y)
+                        })),
+                      ]);
+                    }}
+                  >
+                    <Text style={styles.dropdownText}>{filterYearTo || 'Any'}</Text>
+                    <Ionicons name="chevron-down" size={18} color="#555" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </CollapsibleSection>
+
+            {/* Mileage */}
+            <CollapsibleSection title="Mileage" defaultOpen={false}>
+              <View style={styles.priceRow}>
+                <View style={styles.priceInputWrap}>
+                  <Text style={styles.priceLabel}>Min</Text>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder="0 km"
+                    placeholderTextColor="#999"
+                    keyboardType="numeric"
+                    value={filterMileageFrom}
+                    onChangeText={setFilterMileageFrom}
+                  />
+                </View>
+                <Text style={styles.priceDash}>{'—'}</Text>
+                <View style={styles.priceInputWrap}>
+                  <Text style={styles.priceLabel}>Max</Text>
+                  <TextInput
+                    style={styles.priceInput}
+                    placeholder="Any"
+                    placeholderTextColor="#999"
+                    keyboardType="numeric"
+                    value={filterMileageTo}
+                    onChangeText={setFilterMileageTo}
+                  />
+                </View>
+              </View>
+            </CollapsibleSection>
+
             {/* Ad type */}
             <CollapsibleSection title="Ad type" defaultOpen={false}>
               <View style={styles.optionList}>
@@ -824,6 +1071,110 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 18, fontWeight: '600', color: '#999', marginTop: 12 },
   emptySubtext: { fontSize: 14, color: '#bbb', marginTop: 4 },
   footerLoader: { paddingVertical: 20 },
+
+  // Section Tabs
+  sectionTabsWrap: {
+    backgroundColor: '#fff',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#ddd',
+  },
+  sectionTabsScroll: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  sectionTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+    gap: 6,
+  },
+  sectionTabActive: {
+    backgroundColor: BLUE,
+  },
+  sectionTabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#555',
+  },
+  sectionTabTextActive: {
+    color: '#fff',
+  },
+
+  // Dealer card styles
+  dealerCard: {
+    borderLeftWidth: 3,
+    borderLeftColor: '#0d47a1',
+  },
+  dealerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f8fbff',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#e3edf7',
+    gap: 8,
+  },
+  dealerLogo: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#eee',
+  },
+  dealerLogoPlaceholder: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#0d47a1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dealerName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0d47a1',
+  },
+  dealerBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#4caf50',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Body type grid
+  bodyTypeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  bodyTypeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#ddd',
+    backgroundColor: '#fff',
+  },
+  bodyTypeChipActive: {
+    borderColor: BLUE,
+    backgroundColor: '#f0f7ff',
+  },
+  bodyTypeChipText: {
+    fontSize: 14,
+    color: '#555',
+    fontWeight: '500',
+  },
+  bodyTypeChipTextActive: {
+    color: BLUE,
+    fontWeight: '600',
+  },
 
   // DoneDeal-style Card (single large image)
   card: {
